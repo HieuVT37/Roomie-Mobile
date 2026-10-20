@@ -16,19 +16,18 @@ import {
   passPriceText,
 } from "../../utils/labels";
 
-// Tông màu chủ đạo Dark Theme (Tím / Xanh đen)
+// Tông màu chủ đạo Dark Theme
 const themeColors = {
-  bg: "#0f172a", // Nền chính xanh đen
-  card: "#1e293b", // Nền thẻ card
-  border: "#334155", // Viền
-  text: "#f8fafc", // Chữ chính sáng
-  muted: "#94a3b8", // Chữ phụ xám
-  primary: "#6366f1", // Tím nhấn
-  price: "#818cf8", // Tím sáng nổi bật cho giá
-  danger: "#ef4444", // Đỏ báo lỗi
+  bg: "#0f172a",
+  card: "#1e293b",
+  border: "#334155",
+  text: "#f8fafc",
+  muted: "#94a3b8",
+  primary: "#6366f1",
+  price: "#818cf8",
+  danger: "#ef4444",
 };
 
-// Component dòng thông tin tùy chỉnh với chữ giá trị màu TRẮNG SÁNG (#f8fafc)
 function CustomRow({
   label,
   value,
@@ -54,7 +53,6 @@ export default function PassDetailScreen() {
   const [error, setError] = useState("");
   const [fav, setFav] = useState(false);
 
-  // Tải lại khi đăng nhập thay đổi để có thông tin liên hệ và trạng thái yêu thích
   useEffect(() => {
     let active = true;
     getPassApi(id)
@@ -76,7 +74,7 @@ export default function PassDetailScreen() {
   const toggleFavorite = async () => {
     if (!user) return router.push("/login");
     const next = !fav;
-    setFav(next); // cập nhật ngay, lỗi thì trả lại
+    setFav(next);
     try {
       await (next ? addFavoriteApi("pass", id) : removeFavoriteApi("pass", id));
     } catch {
@@ -233,7 +231,7 @@ const sRow = StyleSheet.create({
   value: {
     fontSize: 14,
     fontWeight: "600",
-    color: themeColors.text, // Chữ TRẮNG SÁNG (#f8fafc) hiển thị rõ nét
+    color: themeColors.text,
   },
 });
 

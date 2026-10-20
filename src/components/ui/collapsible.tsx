@@ -284,3 +284,74 @@ const s = StyleSheet.create({
   buttonText: { color: "#fff", fontWeight: "600" },
   error: { margin: 20, color: themeColors.danger, textAlign: "center" },
 });
+
+export function Segments({
+  value,
+  onChange,
+  options,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { key: string; label: string; dot?: boolean }[];
+}) {
+  return (
+    <View style={sSegments.container}>
+      {options.map((opt) => {
+        const active = value === opt.key;
+        return (
+          <Pressable
+            key={opt.key}
+            style={[sSegments.tab, active && sSegments.activeTab]}
+            onPress={() => onChange(opt.key)}
+          >
+            <Text style={[sSegments.text, active && sSegments.activeText]}>
+              {opt.label}
+            </Text>
+            {opt.dot && <View style={sSegments.dot} />}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+const sSegments = StyleSheet.create({
+  container: {
+    flexDirection: "row",
+    backgroundColor: "#1e293b",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#6366f1",
+    margin: 12,
+    padding: 4,
+    overflow: "hidden",
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+  },
+  activeTab: {
+    backgroundColor: "#6366f1",
+  },
+  text: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#94a3b8",
+  },
+  activeText: {
+    color: "#ffffff",
+    fontWeight: "700",
+  },
+  dot: {
+    position: "absolute",
+    top: 6,
+    right: 10,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#ef4444",
+  },
+});

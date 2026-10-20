@@ -74,7 +74,6 @@ export default function ConnectionsScreen() {
   const u = summary?.unseen || {};
   return (
     <View style={{ flex: 1, backgroundColor: themeColors.bg }}>
-      {/* Thanh tab chuyển đổi đã được component Segments hỗ trợ Dark Theme */}
       <Segments
         value={tab}
         onChange={setTab}

@@ -4,20 +4,18 @@
     "slug": "Roomie-Mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/roomie-logo.png",
     "scheme": "roomiemobile",
     "userInterfaceStyle": "light",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/roomie-logo.png",
       "bundleIdentifier": "com.roomie.mobile",
       "supportsTablet": false
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/images/roomie-logo.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.roomie.mobile"
