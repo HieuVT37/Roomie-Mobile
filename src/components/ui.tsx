@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+﻿import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -11,7 +11,7 @@ import {
   StyleSheet,
   Text,
   useWindowDimensions,
-  View
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { imageUrl } from "../api/axios";
@@ -169,6 +169,11 @@ export function formatTime(iso?: string) {
     : `${p(d.getDate())}/${p(d.getMonth() + 1)}`;
 }
 
+/**
+ * Gallery: hiển thị danh sách ảnh dạng carousel ngang.
+ * Chiều cao tự động tính theo tỉ lệ thực của ảnh đầu tiên
+ * để không bao giờ cắt xén ảnh.
+ */
 export function Gallery({
   images,
   emoji = "🏠",
@@ -180,6 +185,21 @@ export function Gallery({
 }) {
   const { width } = useWindowDimensions();
   const [index, setIndex] = useState(0);
+  const [imgHeight, setImgHeight] = useState(height);
+
+  // Tính chiều cao theo tỉ lệ thực của ảnh đầu tiên
+  useEffect(() => {
+    if (!images?.length) return;
+    const uri = imageUrl(images[0]) as string;
+    if (!uri) return;
+    Image.getSize(
+      uri,
+      (w, h) => {
+        if (w > 0) setImgHeight(Math.round((h / w) * width));
+      },
+      () => setImgHeight(height),
+    );
+  }, [images, width, height]);
 
   if (!images?.length) {
     return (
@@ -195,6 +215,7 @@ export function Gallery({
       </View>
     );
   }
+
   return (
     <View>
       <FlatList
@@ -209,8 +230,8 @@ export function Gallery({
         renderItem={({ item }) => (
           <Image
             source={{ uri: imageUrl(item) as string }}
-            style={{ width, height }}
-            resizeMode="cover"
+            style={{ width, height: imgHeight, backgroundColor: colors.card }}
+            resizeMode="contain"
           />
         )}
       />
