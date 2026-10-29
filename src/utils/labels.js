@@ -106,3 +106,40 @@ export const FAQ_CATEGORY_LABELS = {
   subscription: "Gói dịch vụ",
   safety: "An toàn",
 };
+
+// Bộ nhãn song ngữ Việt – Anh phục vụ chuyển đổi ngôn ngữ động (Mục 4 & 7)
+export const CRITERIA_LABELS_EN = {
+  budget: "Budget",
+  location: "Location",
+  schedule: "Schedule",
+  cleanliness: "Cleanliness",
+  lifestyle: "Lifestyle",
+  privacy: "Privacy",
+  sharedSpace: "Shared Space",
+  interests: "Interests",
+};
+
+export const GENDER_LABELS_EN = { male: "Male", female: "Female", other: "Other", private: "Prefer not to say" };
+export const GUEST_LABELS_EN = { never: "Never", rarely: "Rarely", sometimes: "Sometimes", often: "Often" };
+export const SHARED_LABELS_EN = { minimal: "Minimal", moderate: "Moderate", open: "Open" };
+export const PATTERN_LABELS_EN = { student: "Student", office: "Office hours", freelance: "Freelance / Flexible", shift: "Shift work" };
+
+export const getLocalizedCriteriaLabel = (key, lang = "vi") =>
+  lang === "en" ? CRITERIA_LABELS_EN[key] || key : CRITERIA_LABELS[key] || key;
+
+export const getLocalizedGenderLabel = (key, lang = "vi") =>
+  lang === "en" ? GENDER_LABELS_EN[key] || key : GENDER_LABELS[key] || key;
+
+export const getLocalizedGuestLabel = (key, lang = "vi") =>
+  lang === "en" ? GUEST_LABELS_EN[key] || key : GUEST_LABELS[key] || key;
+
+export const getLocalizedSharedLabel = (key, lang = "vi") =>
+  lang === "en" ? SHARED_LABELS_EN[key] || key : SHARED_LABELS[key] || key;
+
+export const getLocalizedPatternLabel = (key, lang = "vi") =>
+  lang === "en" ? PATTERN_LABELS_EN[key] || "Flexible" : PATTERN_LABELS[key] || "Tự do";
+
+export const formatBudgetLocalized = (b, lang = "vi") => {
+  if (!b) return lang === "en" ? "Hidden" : "Đã ẩn";
+  return `${formatVND(b.min)} - ${formatVND(b.max)}`;
+};

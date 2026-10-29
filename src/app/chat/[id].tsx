@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { imageUrl } from "../../api/axios";
 import { getMessagesApi, sendMessageApi } from "../../api/conversations";
 import { useAuth } from "../../auth/AuthContext";
 import {
@@ -20,7 +21,14 @@ import {
   Loading,
   useKeyboardVisible,
 } from "../../components/ui";
+import { useLanguage } from "../../context/LanguageContext";
 import { useNotifications } from "../../context/NotificationContext";
+import {
+  sendFirestoreMessage,
+  subscribeConversationMessages,
+} from "../../firebase/chat";
+import { isFirebaseConfigured } from "../../firebase/config";
+import { uploadMultipleImagesToFirebase } from "../../firebase/storage";
 
 const themeColors = {
   bg: "#0f172a",
@@ -39,7 +47,8 @@ const hhmm = (iso: string) => {
 
 export default function ChatScreen() {
   const { id, name } = useLocalSearchParams<{ id: string; name?: string }>();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const { language, toggleLanguage, t } = useLanguage();
   const { refresh: refreshNotifications } = useNotifications();
   const insets = useSafeAreaInsets();
   const keyboardVisible = useKeyboardVisible();
@@ -61,13 +70,34 @@ export default function ChatScreen() {
   const merge = useCallback((incoming: any[]) => {
     if (!incoming.length) return;
     setMessages((prev) => {
-      const seen = new Set(prev.map((m) => m._id));
-      const add = incoming.filter((m) => !seen.has(m._id));
-      return add.length ? [...prev, ...add] : prev;
+      const seen = new Set(prev.map((m) => String(m._id || m.id)));
+      const add = incoming.filter((m) => !seen.has(String(m._id || m.id)));
+      if (!add.length) return prev;
+      return [...prev, ...add].sort(
+        (a, b) =>
+          new Date(a.createdAt || 0).getTime() -
+          new Date(b.createdAt || 0).getTime(),
+      );
     });
     lastRef.current = incoming[incoming.length - 1].createdAt;
   }, []);
 
+  // 1. Lắng nghe tin nhắn realtime từ Firebase Firestore (nếu đã cấu hình Firebase)
+  useEffect(() => {
+    if (!id || !isFirebaseConfigured) return undefined;
+    const unsubscribe = subscribeConversationMessages(
+      id,
+      (fbMessages: any[]) => {
+        if (fbMessages.length > 0) {
+          merge(fbMessages);
+        }
+      },
+      () => {},
+    );
+    return () => unsubscribe();
+  }, [id, merge]);
+
+  // 2. Đồng bộ tin nhắn và quyền canSend từ Backend API
   const fetchMessages = useCallback(
     async (initial: boolean) => {
       try {
@@ -81,10 +111,10 @@ export default function ChatScreen() {
         setError("");
       } catch (err: any) {
         if (initial)
-          setError(err.response?.data?.message || "Không tải được tin nhắn");
+          setError(err.response?.data?.message || t.chat.loadError);
       }
     },
-    [id, merge, refreshNotifications],
+    [id, merge, refreshNotifications, t.chat.loadError],
   );
 
   useFocusEffect(
@@ -106,31 +136,60 @@ export default function ChatScreen() {
     setPicked((prev) => [...prev, ...res.assets].slice(0, 4));
   };
 
+  // 3. Gửi tin nhắn: Tải tối đa 4 ảnh lên Firebase Storage -> Ghi vào Firestore + Đồng bộ Backend API
   const send = async () => {
     const body = text.trim();
     if ((!body && !picked.length) || sending) return;
     setSending(true);
     setError("");
     try {
+      let firebaseImageUrls: string[] = [];
+      if (picked.length > 0 && isFirebaseConfigured) {
+        try {
+          firebaseImageUrls = await uploadMultipleImagesToFirebase(
+            picked,
+            `chat/${id}`,
+          );
+        } catch {}
+      }
+
       const files = picked.map((a, i) => ({
         uri: a.uri,
         name: a.fileName || `photo-${Date.now()}-${i}.jpg`,
         type: a.mimeType || "image/jpeg",
       }));
+
+      // Gửi lên Backend API để lưu lịch sử và cập nhật badge thông báo
       const { message } = await sendMessageApi(id, body, files);
-      merge([message]);
+      const finalImages =
+        firebaseImageUrls.length > 0
+          ? firebaseImageUrls
+          : message?.images || [];
+
+      // Ghi đồng thời vào Firestore để cập nhật realtime tức thì
+      if (isFirebaseConfigured && user) {
+        await sendFirestoreMessage(id, {
+          senderId: user.id || user._id,
+          senderName: profile?.displayName || user.email || "Roomie",
+          text: body,
+          images: finalImages,
+          messageId: message?._id || message?.id,
+        }).catch(() => {});
+      }
+
+      merge([{ ...message, images: finalImages }]);
       setText("");
       setPicked([]);
     } catch (err: any) {
-      const msg = err.response?.data?.message || "Không gửi được tin nhắn";
+      const msg = err.response?.data?.message || t.chat.sendError;
       setError(msg);
-      if (picked.length) Alert.alert("Không gửi được ảnh", msg);
+      if (picked.length) Alert.alert(t.chat.sendImageErrorTitle, msg);
     } finally {
       setSending(false);
     }
   };
 
-  if (loading) return <Loading text="Đang tải tin nhắn..." />;
+  if (loading) return <Loading text={t.chat.loadingMessages} />;
 
   const data = [...messages].reverse();
 
@@ -139,49 +198,50 @@ export default function ChatScreen() {
       <KeyboardScreen>
         <Stack.Screen
           options={{
-            title: name || "Tin nhắn",
+            title: name || t.chat.defaultTitle,
             headerStyle: { backgroundColor: themeColors.card },
             headerTintColor: themeColors.text,
             headerShadowVisible: false,
+            headerRight: () => (
+              <Pressable style={s.langBtn} onPress={toggleLanguage}>
+                <Text style={s.langText}>
+                  {language === "vi" ? "🇻🇳 VI" : "🇬🇧 EN"}
+                </Text>
+              </Pressable>
+            ),
           }}
         />
         <FlatList
           style={{ flex: 1, backgroundColor: themeColors.bg }}
           data={data}
           inverted
-          keyExtractor={(m) => m._id}
+          keyExtractor={(m) => String(m._id || m.id)}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
           contentContainerStyle={{ padding: 12, gap: 6 }}
           ListEmptyComponent={
             <Text style={[s.empty, { transform: [{ scaleY: -1 }] }]}>
-              {error || "Hãy gửi tin nhắn đầu tiên."}
+              {error || t.chat.emptyPrompt}
             </Text>
           }
           renderItem={({ item: m }) => {
-            const mine = m.senderId === user.id;
+            const mine = String(m.senderId) === String(user?.id || user?._id);
             return (
               <View style={[s.bubble, mine ? s.mine : s.theirs]}>
                 {m.images?.map((u: string) => {
-                  // Đảm bảo lấy đúng domain của backend (ví dụ: http://localhost:5000 hoặc IP của bạn)
-                  const fullUri = u.startsWith("http")
-                    ? u
-                    : `http://1.1.1.1:5000${u}`; // (Thay http://10.0.2.2:5000 bằng URL backend thực tế của bạn)
-
+                  const fullUri = imageUrl(u) as string;
                   return (
                     <Image
                       key={u}
                       source={{
                         uri: fullUri,
-                        headers: token
-                          ? { Authorization: `Bearer ${token}` }
-                          : undefined,
+                        headers:
+                          token && !fullUri.includes("firebasestorage.googleapis.com")
+                            ? { Authorization: `Bearer ${token}` }
+                            : undefined,
                       }}
                       style={s.photo}
                       resizeMode="cover"
-                      onError={(e) =>
-                        console.log("Lỗi load ảnh:", e.nativeEvent.error)
-                      }
                     />
                   );
                 })}
@@ -248,7 +308,7 @@ export default function ChatScreen() {
               </Pressable>
               <TextInput
                 style={s.input}
-                placeholder="Nhập tin nhắn..."
+                placeholder={t.chat.inputPlaceholder}
                 placeholderTextColor="#64748b"
                 value={text}
                 onChangeText={setText}
@@ -266,7 +326,7 @@ export default function ChatScreen() {
                 disabled={sending || (!text.trim() && !picked.length)}
               >
                 <Text style={{ color: "#fff", fontWeight: "700" }}>
-                  {sending ? "..." : "Gửi"}
+                  {sending ? "..." : t.chat.sendBtn}
                 </Text>
               </Pressable>
             </View>
@@ -279,8 +339,7 @@ export default function ChatScreen() {
             ]}
           >
             <Text style={{ color: themeColors.muted, textAlign: "center" }}>
-              Hai bạn chưa kết nối hoặc kết nối đã bị hủy nên không thể nhắn
-              tin.
+              {t.chat.cannotSendNotice}
             </Text>
           </View>
         )}
@@ -290,6 +349,19 @@ export default function ChatScreen() {
 }
 
 const s = StyleSheet.create({
+  langBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: "#312e81",
+    borderWidth: 1,
+    borderColor: "#6366f1",
+  },
+  langText: {
+    color: "#f8fafc",
+    fontSize: 12,
+    fontWeight: "700",
+  },
   bubble: {
     maxWidth: "80%",
     borderRadius: 16,

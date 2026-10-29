@@ -40,6 +40,17 @@ export function AuthProvider({ children }) {
     setProfile(data.profile);
   };
 
+  // Tải lại user + hồ sơ từ server (dùng sau khi sửa hồ sơ để avatar/tên cập nhật ngay)
+  const refreshProfile = async () => {
+    try {
+      const data = await meApi();
+      setUser(data.user);
+      setProfile(data.profile);
+    } catch (err) {
+      // bỏ qua: lần mở app sau sẽ tải lại
+    }
+  };
+
   const logout = async () => {
     await SecureStore.deleteItemAsync("token");
     setUser(null);
@@ -47,7 +58,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, profile, loading, login, logout, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
