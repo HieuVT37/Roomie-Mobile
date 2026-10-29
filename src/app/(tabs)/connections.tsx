@@ -2,40 +2,40 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
-  FlatList,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    Alert,
+    FlatList,
+    Pressable,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 import {
-  acceptApi,
-  cancelApi,
-  connectionSummaryApi,
-  disconnectApi,
-  listConnectionsApi,
-  markSeenApi,
-  rejectApi,
-  sendRequestApi,
+    acceptApi,
+    cancelApi,
+    connectionSummaryApi,
+    disconnectApi,
+    listConnectionsApi,
+    markSeenApi,
+    rejectApi,
+    sendRequestApi,
 } from "../../api/connections";
 import { startConversationApi } from "../../api/conversations";
 import { listMatchesApi } from "../../api/matching";
 import { useAuth } from "../../auth/AuthContext";
 import {
-  Avatar,
-  Chip,
-  Loading,
-  LoginPrompt,
-  Segments,
-  shared,
+    Avatar,
+    Chip,
+    Loading,
+    LoginPrompt,
+    Segments,
+    shared,
 } from "../../components/ui";
 import { useNotifications } from "../../context/NotificationContext";
 import {
-  useInfiniteList,
-  useTabPressScrollTop,
+    useInfiniteList,
+    useTabPressScrollTop,
 } from "../../hooks/use-infinite-list";
 import { GENDER_LABELS, formatBudget, normalizeVietnamese } from "../../utils/labels";
 
@@ -103,6 +103,7 @@ function MatchList() {
   const router = useRouter();
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
   const [sent, setSent] = useState<Record<string, boolean>>({});
   const [busyId, setBusyId] = useState("");
   const listRef = useRef<FlatList>(null);
@@ -110,8 +111,12 @@ function MatchList() {
 
   // Tìm kiếm tức thì khi người dùng nhập (debounce 300ms)
   useEffect(() => {
+    if (text.trim()) {
+      setIsSearching(true);
+    }
     const timer = setTimeout(() => {
       setQ(text.trim());
+      setIsSearching(false);
     }, 300);
     return () => clearTimeout(timer);
   }, [text]);
@@ -146,6 +151,7 @@ function MatchList() {
   const handleClearFilter = () => {
     setText("");
     setQ("");
+    setIsSearching(false);
   };
 
   // Lọc kết quả theo khu vực người dùng nhập vào
@@ -193,7 +199,12 @@ function MatchList() {
             onChangeText={setText}
             returnKeyType="search"
           />
-          {text.length > 0 && (
+          {isSearching && (
+            <View style={{ padding: 4 }}>
+              <Ionicons name="hourglass-outline" size={18} color={themeColors.primary} />
+            </View>
+          )}
+          {text.length > 0 && !isSearching && (
             <Pressable
               hitSlop={8}
               onPress={handleClearFilter}
@@ -206,7 +217,7 @@ function MatchList() {
       </View>
 
       
-      {list.loading ? (
+      {list.loading && !q ? (
         <Loading text="Đang tìm người phù hợp..." />
       ) : (
         <FlatList
