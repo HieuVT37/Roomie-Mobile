@@ -1,6 +1,7 @@
+import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -31,6 +32,7 @@ import {
   CONDITION_LABELS,
   DEAL_LABELS,
   ITEM_CATEGORY_LABELS,
+  normalizeVietnamese,
 } from "../../utils/labels";
 
 const themeColors = {
@@ -79,25 +81,64 @@ export default function PassListScreen() {
   const listRef = useRef<FlatList>(null);
   useTabPressScrollTop(listRef);
 
+  // Tự động tìm kiếm tức thì khi người dùng nhập (debounce 300ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setQ(text.trim());
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [text]);
+
+  const handleClearFilter = () => {
+    setText("");
+    setQ("");
+  };
+
   const fetchItems = useCallback(
     async (p: number) => {
       if (tab === "mine") {
         return myPassApi();
       }
-      return listPassApi({
+      const params: any = {
         page: p,
-        limit: 12,
-        q,
+        limit: 30,
         type: tab === "room" || tab === "item" ? tab : undefined,
-      });
+      };
+      if (q) {
+        if (tab === "room") {
+          params.area = q;
+        } else {
+          params.q = q;
+        }
+      }
+      try {
+        const res = await listPassApi(params);
+        // Nếu có q mà server trả về rỗng (ví dụ do gõ tiếng Việt không dấu),
+        // tải toàn bộ bài đăng thuộc tab đó để client tự lọc chuẩn xác
+        if (q && (!res?.items || res.items.length === 0)) {
+          const fallback = await listPassApi({
+            page: p,
+            limit: 30,
+            type: tab === "room" || tab === "item" ? tab : undefined,
+          });
+          return fallback;
+        }
+        return res;
+      } catch {
+        return listPassApi({
+          page: p,
+          limit: 30,
+          type: tab === "room" || tab === "item" ? tab : undefined,
+        });
+      }
     },
     [q, tab],
   );
 
   const list = useInfiniteList(fetchItems, [q, tab]);
 
-  // Hợp nhất bài vừa tạo vào danh sách hiển thị
-  const displayItems = (() => {
+  // Hợp nhất bài vừa tạo vào danh sách hiển thị và lọc theo khu vực / tên món đồ
+  const displayItems = useMemo(() => {
     const serverItems = list.items || [];
     if (tab === "create") return [];
 
@@ -117,8 +158,28 @@ export default function PassListScreen() {
       (it: any) => !existingIds.has(String(it.id || it._id)),
     );
 
-    return [...uniqueRecent, ...serverItems];
-  })();
+    let allItems = [...uniqueRecent, ...serverItems];
+
+    if (q) {
+      const normQ = normalizeVietnamese(q);
+      if (tab === "room") {
+        // Pass phòng: CHỈ tìm kiếm theo khu vực (area, address) - KHÔNG tìm theo tiêu đề
+        allItems = allItems.filter((item) => {
+          const areaNorm = normalizeVietnamese(item.area || "");
+          const addrNorm = normalizeVietnamese(item.roomInfo?.address || "");
+          return areaNorm.includes(normQ) || addrNorm.includes(normQ);
+        });
+      } else if (tab === "item") {
+        // Pass đồ: CHỈ tìm kiếm theo tên món đồ (title) - KHÔNG tìm theo khu vực
+        allItems = allItems.filter((item) => {
+          const titleNorm = normalizeVietnamese(item.title || "");
+          return titleNorm.includes(normQ);
+        });
+      }
+    }
+
+    return allItems;
+  }, [list.items, recentCreated, tab, q]);
 
   const handleCreatedSuccess = (
     createdItem: any,
@@ -179,19 +240,41 @@ export default function PassListScreen() {
       ) : (
         <>
           {(tab === "room" || tab === "item") && (
-            <TextInput
-              style={s.searchBox}
-              placeholder={
-                tab === "room"
-                  ? "Tìm kiếm theo khu vực (quận, phường)..."
-                  : "Tìm kiếm món đồ..."
-              }
-              placeholderTextColor="#64748b"
-              value={text}
-              onChangeText={setText}
-              returnKeyType="search"
-              onSubmitEditing={() => setQ(text.trim())}
-            />
+            <View style={{ marginBottom: 4 }}>
+              <View style={s.searchContainer}>
+                <View style={s.searchBar}>
+                  <Ionicons
+                    name="search"
+                    size={18}
+                    color="#64748b"
+                    style={{ marginRight: 8 }}
+                  />
+                  <TextInput
+                    style={s.searchInput}
+                    placeholder={
+                      tab === "room"
+                        ? "Tìm theo khu vực (quận, phường, địa chỉ)..."
+                        : "Tìm theo tên món đồ..."
+                    }
+                    placeholderTextColor="#64748b"
+                    value={text}
+                    onChangeText={setText}
+                    returnKeyType="search"
+                  />
+                  {text.length > 0 && (
+                    <Pressable
+                      hitSlop={8}
+                      onPress={handleClearFilter}
+                      style={{ padding: 4 }}
+                    >
+                      <Ionicons name="close-circle" size={18} color="#94a3b8" />
+                    </Pressable>
+                  )}
+                </View>
+              </View>
+
+              
+            </View>
           )}
           {list.loading ? (
             <Loading />
@@ -214,14 +297,41 @@ export default function PassListScreen() {
               onEndReachedThreshold={0.5}
               onEndReached={list.loadMore}
               ListEmptyComponent={
-                <Text style={shared.empty}>
-                  {list.error ||
-                    (tab === "mine"
-                      ? "Bạn chưa đăng bài nào."
-                      : tab === "room"
-                        ? "Chưa có bài Pass phòng nào."
-                        : "Chưa có bài Pass đồ nào.")}
-                </Text>
+                <View
+                  style={{
+                    alignItems: "center",
+                    paddingVertical: 24,
+                    paddingHorizontal: 16,
+                  }}
+                >
+                  <Text style={[shared.empty, { textAlign: "center" }]}>
+                    {list.error ||
+                      (q
+                        ? (tab === "room" ? `Không tìm thấy phòng ở khu vực "${q}".` : `Không tìm thấy món đồ nào có tên "${q}".`)
+                        : tab === "mine"
+                          ? "Bạn chưa đăng bài nào."
+                          : tab === "room"
+                            ? "Chưa có bài Pass phòng nào."
+                            : "Chưa có bài Pass đồ nào.")}
+                  </Text>
+                  {!!q && (
+                    <Pressable
+                      style={s.clearFilterEmptyBtn}
+                      onPress={handleClearFilter}
+                    >
+                      <Ionicons name="refresh-outline" size={16} color="#fff" />
+                      <Text
+                        style={{
+                          color: "#fff",
+                          fontWeight: "600",
+                          fontSize: 13,
+                        }}
+                      >
+                        Xóa bộ lọc & Tải lại
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
               }
               renderItem={({ item }) => (
                 <View>
@@ -810,6 +920,93 @@ function CreatePassForm({
 }
 
 const s = StyleSheet.create({
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 12,
+    marginTop: 8,
+    marginBottom: 8,
+    gap: 8,
+  },
+  searchBar: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: themeColors.card,
+    borderWidth: 1,
+    borderColor: themeColors.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 46,
+  },
+  searchInput: {
+    flex: 1,
+    color: themeColors.text,
+    fontSize: 14,
+    paddingVertical: 0,
+  },
+  searchBtn: {
+    backgroundColor: themeColors.primary,
+    height: 46,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  searchBtnText: {
+    color: "#ffffff",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  activeFilterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginHorizontal: 12,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "rgba(99, 102, 241, 0.12)",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(99, 102, 241, 0.3)",
+  },
+  activeFilterBadge: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: 8,
+  },
+  activeFilterText: {
+    color: themeColors.muted,
+    fontSize: 13,
+  },
+  clearFilterBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(239, 68, 68, 0.15)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(239, 68, 68, 0.3)",
+  },
+  clearFilterBtnText: {
+    color: themeColors.danger,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  clearFilterEmptyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: themeColors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginTop: 8,
+  },
   searchBox: {
     backgroundColor: themeColors.card,
     borderWidth: 1,

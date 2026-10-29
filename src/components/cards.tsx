@@ -106,7 +106,7 @@ export function PassCard({ item }: { item: any }) {
         />
       ) : (
         <View style={[{ width: "100%", height: 180, backgroundColor: "#334155" }, s.coverEmpty]}>
-          <Text style={{ fontSize: 40 }}>📦</Text>
+          <Text style={{ fontSize: 40 }}>{item.type === 'room' ? '🏠' : '📦'}</Text>
         </View>
       )}
       <View style={{ padding: 12, gap: 6 }}>
@@ -115,7 +115,7 @@ export function PassCard({ item }: { item: any }) {
           {item.title}
         </Text>
         <Text style={s.price}>{passPriceText(item)}</Text>
-        {item.area ? <Text style={s.muted}>📍 {item.area}</Text> : null}
+        {(item.area || item.roomInfo?.address) ? <Text style={s.muted}>📍 {item.area || item.roomInfo?.address}</Text> : null}
       </View>
     </Pressable>
   );
