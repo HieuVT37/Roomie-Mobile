@@ -3,10 +3,10 @@ import { useEffect, useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { imageUrl } from "../api/axios";
 import {
-  PASS_TYPE_LABELS,
-  ROOM_TYPE_LABELS,
-  formatVND,
-  passPriceText,
+    PASS_TYPE_LABELS,
+    ROOM_TYPE_LABELS,
+    formatVND,
+    passPriceText,
 } from "../utils/labels";
 import { colors, shared } from "./ui";
 
@@ -81,13 +81,14 @@ export function AccommodationCard({ item }: { item: any }) {
   );
 }
 
-// 2. CARD PASS ĐỒ (PassCard)
+// 2. CARD PASS ĐỒ & PASS PHÒNG (PassCard)
 export function PassCard({ item }: { item: any }) {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
   const cardWidth = screenWidth - 24;
   const firstImage = item.images?.[0] ? (imageUrl(item.images[0]) as string) : undefined;
-  const imgHeight = useImageAspectHeight(firstImage, cardWidth);
+  // Tỉ lệ 3:4 (chiều cao = 3, chiều rộng = 4)
+  const imgHeight = Math.round((cardWidth * 3) / 4);
 
   const id = item.id || item._id;
 
@@ -99,14 +100,32 @@ export function PassCard({ item }: { item: any }) {
       }
     >
       {firstImage ? (
-        <Image
-          source={{ uri: firstImage }}
-          style={{ width: "100%", height: imgHeight, backgroundColor: "#334155" }}
-          resizeMode="contain"
-        />
+        <View style={{ width: "100%", height: imgHeight, backgroundColor: "#334155", overflow: "hidden" }}>
+          {/* Nền mờ */}
+          <Image
+            source={{ uri: firstImage }}
+            style={{ 
+              position: "absolute", 
+              width: "100%", 
+              height: "100%" 
+            }}
+            resizeMode="cover"
+            blurRadius={20}
+          />
+          {/* Ảnh chính ở giữa */}
+          <Image
+            source={{ uri: firstImage }}
+            style={{ 
+              position: "absolute", 
+              width: "100%", 
+              height: "100%" 
+            }}
+            resizeMode="contain"
+          />
+        </View>
       ) : (
-        <View style={[{ width: "100%", height: 180, backgroundColor: "#334155" }, s.coverEmpty]}>
-          <Text style={{ fontSize: 40 }}>📦</Text>
+        <View style={[{ width: "100%", height: imgHeight, backgroundColor: "#334155" }, s.coverEmpty]}>
+          <Text style={{ fontSize: 40 }}>{item.type === 'room' ? '🏠' : '📦'}</Text>
         </View>
       )}
       <View style={{ padding: 12, gap: 6 }}>
@@ -115,7 +134,7 @@ export function PassCard({ item }: { item: any }) {
           {item.title}
         </Text>
         <Text style={s.price}>{passPriceText(item)}</Text>
-        {item.area ? <Text style={s.muted}>📍 {item.area}</Text> : null}
+        {(item.area || item.roomInfo?.address) ? <Text style={s.muted}>📍 {item.area || item.roomInfo?.address}</Text> : null}
       </View>
     </Pressable>
   );
