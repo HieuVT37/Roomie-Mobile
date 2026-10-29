@@ -3,36 +3,36 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
-  FlatList,
-  Image,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View,
+    Alert,
+    FlatList,
+    Image,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 import {
-  createPassApi,
-  deletePassApi,
-  listPassApi,
-  myPassApi,
+    createPassApi,
+    deletePassApi,
+    listPassApi,
+    myPassApi,
 } from "../../api/pass";
 import { uploadImagesApi } from "../../api/uploads";
 import { PassCard } from "../../components/cards";
 import { Loading, Segments, shared } from "../../components/ui";
 import {
-  useInfiniteList,
-  useTabPressScrollTop,
+    useInfiniteList,
+    useTabPressScrollTop,
 } from "../../hooks/use-infinite-list";
 import {
-  CONDITION_LABELS,
-  DEAL_LABELS,
-  ITEM_CATEGORY_LABELS,
-  normalizeVietnamese,
+    CONDITION_LABELS,
+    DEAL_LABELS,
+    ITEM_CATEGORY_LABELS,
+    normalizeVietnamese,
 } from "../../utils/labels";
 
 const themeColors = {
@@ -75,6 +75,7 @@ export default function PassListScreen() {
   const [tab, setTab] = useState("room");
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
   // Danh sách các bài pass vừa tạo trên client để luôn hiển thị ngay lập tức
   const [recentCreated, setRecentCreated] = useState<any[]>([]);
 
@@ -83,8 +84,12 @@ export default function PassListScreen() {
 
   // Tự động tìm kiếm tức thì khi người dùng nhập (debounce 300ms)
   useEffect(() => {
+    if (text.trim()) {
+      setIsSearching(true);
+    }
     const timer = setTimeout(() => {
       setQ(text.trim());
+      setIsSearching(false);
     }, 300);
     return () => clearTimeout(timer);
   }, [text]);
@@ -92,6 +97,7 @@ export default function PassListScreen() {
   const handleClearFilter = () => {
     setText("");
     setQ("");
+    setIsSearching(false);
   };
 
   const fetchItems = useCallback(
@@ -261,7 +267,12 @@ export default function PassListScreen() {
                     onChangeText={setText}
                     returnKeyType="search"
                   />
-                  {text.length > 0 && (
+                  {isSearching && (
+                    <View style={{ padding: 4 }}>
+                      <Ionicons name="hourglass-outline" size={18} color={themeColors.primary} />
+                    </View>
+                  )}
+                  {text.length > 0 && !isSearching && (
                     <Pressable
                       hitSlop={8}
                       onPress={handleClearFilter}
@@ -276,7 +287,7 @@ export default function PassListScreen() {
               
             </View>
           )}
-          {list.loading ? (
+          {list.loading && !q ? (
             <Loading />
           ) : (
             <FlatList
