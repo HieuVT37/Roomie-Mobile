@@ -1,5 +1,6 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -36,7 +37,7 @@ import {
   useInfiniteList,
   useTabPressScrollTop,
 } from "../../hooks/use-infinite-list";
-import { GENDER_LABELS, formatBudget } from "../../utils/labels";
+import { GENDER_LABELS, formatBudget, normalizeVietnamese } from "../../utils/labels";
 
 // Tông màu chủ đạo Dark Theme (Tím / Xanh đen)
 const themeColors = {
@@ -106,13 +107,61 @@ function MatchList() {
   const [busyId, setBusyId] = useState("");
   const listRef = useRef<FlatList>(null);
   useTabPressScrollTop(listRef);
-  const list = useInfiniteList(
-    (p) => listMatchesApi({ page: p, limit: 12, q }),
+
+  // Tìm kiếm tức thì khi người dùng nhập (debounce 300ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setQ(text.trim());
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [text]);
+
+  const fetchMatches = useCallback(
+    async (p: number) => {
+      try {
+        const res = await listMatchesApi({
+          page: p,
+          limit: 12,
+          location: q || undefined,
+        });
+        // Nếu có q mà server trả về rỗng (ví dụ do gõ tiếng Việt không dấu),
+        // fallback lấy danh sách để client tự lọc không dấu chuẩn xác
+        if (q && (!res?.items || res.items.length === 0)) {
+          const fallbackRes = await listMatchesApi({ page: p, limit: 12 });
+          return fallbackRes;
+        }
+        return res;
+      } catch {
+        return listMatchesApi({ page: p, limit: 12 });
+      }
+    },
     [q],
   );
 
+  const list = useInfiniteList(fetchMatches, [q]);
+
   const needProfile =
     list.errorCode === "PROFILE_INCOMPLETE" || list.errorCode === "NOT_LOOKING";
+
+  const handleClearFilter = () => {
+    setText("");
+    setQ("");
+  };
+
+  // Lọc kết quả theo khu vực người dùng nhập vào
+  const displayItems = useMemo(() => {
+    const rawItems = list.items || [];
+    if (!q) return rawItems;
+    const normQ = normalizeVietnamese(q);
+    return rawItems.filter((item: any) => {
+      const locations = Array.isArray(item.locations) ? item.locations : [];
+      const matchLoc = locations.some((loc: string) =>
+        normalizeVietnamese(loc).includes(normQ),
+      );
+      const matchCity = normalizeVietnamese(item.city || "").includes(normQ);
+      return matchLoc || matchCity;
+    });
+  }, [list.items, q]);
 
   const connect = async (item: any) => {
     setBusyId(item.userId);
@@ -128,22 +177,42 @@ function MatchList() {
 
   return (
     <View style={{ flex: 1, backgroundColor: themeColors.bg }}>
-      <TextInput
-        style={s.searchBox}
-        placeholder="Tìm theo khu vực (quận, phường)..."
-        placeholderTextColor="#64748b"
-        value={text}
-        onChangeText={setText}
-        returnKeyType="search"
-        onSubmitEditing={() => setQ(text.trim())}
-      />
+      <View style={s.searchContainer}>
+        <View style={s.searchBar}>
+          <Ionicons
+            name="search"
+            size={18}
+            color="#64748b"
+            style={{ marginRight: 8 }}
+          />
+          <TextInput
+            style={s.searchInput}
+            placeholder="Tìm theo khu vực (quận, phường)..."
+            placeholderTextColor="#64748b"
+            value={text}
+            onChangeText={setText}
+            returnKeyType="search"
+          />
+          {text.length > 0 && (
+            <Pressable
+              hitSlop={8}
+              onPress={handleClearFilter}
+              style={{ padding: 4 }}
+            >
+              <Ionicons name="close-circle" size={18} color="#94a3b8" />
+            </Pressable>
+          )}
+        </View>
+      </View>
+
+      
       {list.loading ? (
         <Loading text="Đang tìm người phù hợp..." />
       ) : (
         <FlatList
           style={{ backgroundColor: themeColors.bg }}
           ref={listRef}
-          data={list.items}
+          data={displayItems}
           keyExtractor={(it) => it.userId}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ padding: 12, gap: 12 }}
@@ -158,11 +227,35 @@ function MatchList() {
           onEndReachedThreshold={0.5}
           onEndReached={list.loadMore}
           ListEmptyComponent={
-            <Text style={shared.empty}>
-              {needProfile
-                ? `${list.error}\n\nHãy hoàn thiện hồ sơ tìm bạn ở trang web Roomie rồi quay lại đây.`
-                : list.error || "Không có hồ sơ nào phù hợp."}
-            </Text>
+            <View
+              style={{
+                alignItems: "center",
+                paddingVertical: 24,
+                paddingHorizontal: 16,
+              }}
+            >
+              <Text style={[shared.empty, { textAlign: "center" }]}>
+                {needProfile
+                  ? `${list.error}\n\nHãy hoàn thiện hồ sơ tìm bạn ở trang web Roomie rồi quay lại đây.`
+                  : list.error ||
+                    (q
+                      ? `Không tìm thấy kết quả phù hợp cho "${q}".`
+                      : "Không có hồ sơ nào phù hợp.")}
+              </Text>
+              {!!q && (
+                <Pressable
+                  style={s.clearFilterEmptyBtn}
+                  onPress={handleClearFilter}
+                >
+                  <Ionicons name="refresh-outline" size={16} color="#fff" />
+                  <Text
+                    style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}
+                  >
+                    Xóa bộ lọc & Tải lại
+                  </Text>
+                </Pressable>
+              )}
+            </View>
           }
           renderItem={({ item }) => {
             const status = sent[item.userId] ? "sent" : item.relation?.status;
@@ -530,6 +623,93 @@ function ConnectionList({
 }
 
 const s = StyleSheet.create({
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 12,
+    marginTop: 12,
+    marginBottom: 8,
+    gap: 8,
+  },
+  searchBar: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: themeColors.card,
+    borderWidth: 1,
+    borderColor: themeColors.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 46,
+  },
+  searchInput: {
+    flex: 1,
+    color: themeColors.text,
+    fontSize: 14,
+    paddingVertical: 0,
+  },
+  searchBtn: {
+    backgroundColor: themeColors.primary,
+    height: 46,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  searchBtnText: {
+    color: "#ffffff",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  activeFilterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginHorizontal: 12,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "rgba(99, 102, 241, 0.12)",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(99, 102, 241, 0.3)",
+  },
+  activeFilterBadge: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: 8,
+  },
+  activeFilterText: {
+    color: themeColors.muted,
+    fontSize: 13,
+  },
+  clearFilterBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(239, 68, 68, 0.15)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(239, 68, 68, 0.3)",
+  },
+  clearFilterBtnText: {
+    color: themeColors.danger,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  clearFilterEmptyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: themeColors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginTop: 8,
+  },
   searchBox: {
     backgroundColor: themeColors.card,
     borderWidth: 1,
