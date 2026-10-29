@@ -99,6 +99,7 @@ export default function ConnectionsScreen() {
 
 /* ---------------- Gợi ý bạn cùng phòng ---------------- */
 function MatchList() {
+  const router = useRouter();
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
   const [sent, setSent] = useState<Record<string, boolean>>({});
@@ -129,7 +130,7 @@ function MatchList() {
     <View style={{ flex: 1, backgroundColor: themeColors.bg }}>
       <TextInput
         style={s.searchBox}
-        placeholder="Tìm theo mô tả bản thân..."
+        placeholder="Tìm theo khu vực (quận, phường)..."
         placeholderTextColor="#64748b"
         value={text}
         onChangeText={setText}
@@ -174,60 +175,74 @@ function MatchList() {
               .join(" · ");
             return (
               <View style={s.card}>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    gap: 12,
-                    alignItems: "center",
-                  }}
-                >
-                  <Avatar uri={item.avatarUrl} name={item.displayName} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.name} numberOfLines={1}>
-                      {item.displayName}
-                    </Text>
-                    {sub ? (
-                      <Text style={s.muted} numberOfLines={1}>
-                        {sub}
-                      </Text>
-                    ) : null}
-                  </View>
-                  <View
-                    style={[
-                      s.score,
-                      {
-                        backgroundColor:
-                          item.match.score >= 80
-                            ? "#10b981"
-                            : item.match.score >= 50
-                              ? "#d97706"
-                              : "#475569",
+                {/* Bấm vào thẻ thông tin để xem hồ sơ chi tiết */}
+                <Pressable
+                  onPress={() =>
+                    router.push({
+                      pathname: "/profile/[id]",
+                      params: {
+                        id: String(item.userId),
+                        data: JSON.stringify(item),
                       },
-                    ]}
-                  >
-                    <Text style={{ color: "#fff", fontWeight: "700" }}>
-                      {Math.round(item.match.score)}%
-                    </Text>
-                  </View>
-                </View>
-                {!item.match.compatible && (
-                  <Text style={{ color: themeColors.danger, fontSize: 12 }}>
-                    Không đạt tiêu chí bắt buộc
-                  </Text>
-                )}
-                {item.bio ? (
-                  <Text numberOfLines={3} style={{ color: themeColors.text }}>
-                    {item.bio}
-                  </Text>
-                ) : null}
-                <View
-                  style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}
+                    })
+                  }
+                  style={{ gap: 10 }}
                 >
-                  <Chip text={`💰 ${formatBudget(item.budget)}`} />
-                  {(item.locations || []).slice(0, 3).map((l: string) => (
-                    <Chip key={l} text={`📍 ${l}`} />
-                  ))}
-                </View>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      gap: 12,
+                      alignItems: "center",
+                    }}
+                  >
+                    <Avatar uri={item.avatarUrl} name={item.displayName} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.name} numberOfLines={1}>
+                        {item.displayName}
+                      </Text>
+                      {sub ? (
+                        <Text style={s.muted} numberOfLines={1}>
+                          {sub}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <View
+                      style={[
+                        s.score,
+                        {
+                          backgroundColor:
+                            item.match.score >= 80
+                              ? "#10b981"
+                              : item.match.score >= 50
+                                ? "#d97706"
+                                : "#475569",
+                        },
+                      ]}
+                    >
+                      <Text style={{ color: "#fff", fontWeight: "700" }}>
+                        {Math.round(item.match.score)}%
+                      </Text>
+                    </View>
+                  </View>
+                  {!item.match.compatible && (
+                    <Text style={{ color: themeColors.danger, fontSize: 12 }}>
+                      Không đạt tiêu chí bắt buộc
+                    </Text>
+                  )}
+                  {item.bio ? (
+                    <Text numberOfLines={3} style={{ color: themeColors.text }}>
+                      {item.bio}
+                    </Text>
+                  ) : null}
+                  <View
+                    style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}
+                  >
+                    <Chip text={`💰 ${formatBudget(item.budget)}`} />
+                    {(item.locations || []).slice(0, 3).map((l: string) => (
+                      <Chip key={l} text={`📍 ${l}`} />
+                    ))}
+                  </View>
+                </Pressable>
                 {status === "accepted" ? (
                   <Text style={s.state}>Đã kết nối</Text>
                 ) : status === "sent" ? (
@@ -365,47 +380,91 @@ function ConnectionList({
       }
       renderItem={({ item: c }) => {
         const busy = busyId === c.id;
+        const targetUserId = String(
+          c.user?.userId || c.user?.id || c.userId || "",
+        );
         return (
           <View style={[s.card, busy && { opacity: 0.6 }]}>
-            <View
-              style={{ flexDirection: "row", gap: 12, alignItems: "center" }}
+            {/* Bấm vào thẻ để xem hồ sơ chi tiết */}
+            <Pressable
+              onPress={() =>
+                targetUserId &&
+                router.push({
+                  pathname: "/profile/[id]",
+                  params: {
+                    id: targetUserId,
+                    data: JSON.stringify({
+                      userId: targetUserId,
+                      displayName: c.user?.displayName,
+                      avatarUrl: c.user?.avatarUrl,
+                      age: c.user?.age,
+                      match:
+                        c.matchScore != null
+                          ? { score: c.matchScore }
+                          : undefined,
+                      relation: {
+                        status:
+                          type === "accepted"
+                            ? "accepted"
+                            : type === "sent"
+                              ? "sent"
+                              : type === "received"
+                                ? "received"
+                                : undefined,
+                      },
+                      message: c.message,
+                    }),
+                  },
+                })
+              }
+              style={{ gap: 8 }}
             >
-              <Avatar uri={c.user.avatarUrl} name={c.user.displayName} />
-              <View style={{ flex: 1 }}>
-                <View
-                  style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-                >
-                  <Text style={s.name} numberOfLines={1}>
-                    {c.user.displayName}
+              <View
+                style={{ flexDirection: "row", gap: 12, alignItems: "center" }}
+              >
+                <Avatar uri={c.user?.avatarUrl} name={c.user?.displayName} />
+                <View style={{ flex: 1 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <Text style={s.name} numberOfLines={1}>
+                      {c.user?.displayName}
+                    </Text>
+                    {c.unseen && (
+                      <View style={s.newBadge}>
+                        <Text
+                          style={{
+                            color: "#fff",
+                            fontSize: 11,
+                            fontWeight: "700",
+                          }}
+                        >
+                          Mới
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={s.muted} numberOfLines={1}>
+                    {[
+                      c.user?.age && `${c.user.age} tuổi`,
+                      c.matchScore != null &&
+                        `Phù hợp ${Math.round(c.matchScore)}%`,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </Text>
-                  {c.unseen && (
-                    <View style={s.newBadge}>
-                      <Text
-                        style={{
-                          color: "#fff",
-                          fontSize: 11,
-                          fontWeight: "700",
-                        }}
-                      >
-                        Mới
-                      </Text>
-                    </View>
-                  )}
                 </View>
-                <Text style={s.muted} numberOfLines={1}>
-                  {[
-                    c.user.age && `${c.user.age} tuổi`,
-                    c.matchScore != null &&
-                      `Phù hợp ${Math.round(c.matchScore)}%`,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </Text>
               </View>
-            </View>
-            {c.message ? (
-              <Text style={{ color: themeColors.text }}>“{c.message}”</Text>
-            ) : null}
+              {c.message ? (
+                <Text style={{ color: themeColors.text }}>
+                  &ldquo;{c.message}&rdquo;
+                </Text>
+              ) : null}
+            </Pressable>
 
             {type === "received" && (
               <View style={{ flexDirection: "row", gap: 10 }}>

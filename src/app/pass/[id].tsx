@@ -1,8 +1,26 @@
+import * as ImagePicker from "expo-image-picker";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import {
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+  Image,
+} from "react-native";
 import { addFavoriteApi, removeFavoriteApi } from "../../api/favorites";
-import { getPassApi } from "../../api/pass";
+import {
+  deletePassApi,
+  getPassApi,
+  setPassStatusApi,
+  updatePassApi,
+} from "../../api/pass";
+import { uploadImagesApi } from "../../api/uploads";
 import { useAuth } from "../../auth/AuthContext";
 import { MessageOwnerButton } from "../../components/MessageOwnerButton";
 import { Gallery, Loading, useBottomPad } from "../../components/ui";
@@ -16,7 +34,6 @@ import {
   passPriceText,
 } from "../../utils/labels";
 
-// Tông màu chủ đạo Dark Theme
 const themeColors = {
   bg: "#0f172a",
   card: "#1e293b",
@@ -26,7 +43,31 @@ const themeColors = {
   primary: "#6366f1",
   price: "#818cf8",
   danger: "#ef4444",
+  success: "#10b981",
+  warning: "#d97706",
 };
+
+const CATEGORY_OPTIONS = [
+  { key: "furniture", label: ITEM_CATEGORY_LABELS.furniture || "Nội thất" },
+  { key: "appliance", label: ITEM_CATEGORY_LABELS.appliance || "Đồ điện" },
+  { key: "kitchen", label: ITEM_CATEGORY_LABELS.kitchen || "Đồ bếp" },
+  { key: "storage", label: ITEM_CATEGORY_LABELS.storage || "Đồ lưu trữ" },
+  { key: "other", label: ITEM_CATEGORY_LABELS.other || "Khác" },
+];
+
+const CONDITION_OPTIONS = [
+  { key: "new", label: CONDITION_LABELS.new || "Mới 100%" },
+  { key: "like_new", label: CONDITION_LABELS.like_new || "Như mới" },
+  { key: "good", label: CONDITION_LABELS.good || "Tốt" },
+  { key: "fair", label: CONDITION_LABELS.fair || "Khá" },
+  { key: "old", label: CONDITION_LABELS.old || "Cũ" },
+];
+
+const DEAL_OPTIONS = [
+  { key: "sell", label: DEAL_LABELS.sell || "Bán" },
+  { key: "give_away", label: DEAL_LABELS.give_away || "Cho tặng" },
+  { key: "exchange", label: DEAL_LABELS.exchange || "Trao đổi" },
+];
 
 function CustomRow({
   label,
@@ -45,31 +86,31 @@ function CustomRow({
 }
 
 export default function PassDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, edit } = useLocalSearchParams<{ id: string; edit?: string }>();
   const router = useRouter();
   const { user } = useAuth();
   const bottom = useBottomPad();
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState("");
   const [fav, setFav] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(edit === "true");
+  const [busyAction, setBusyAction] = useState(false);
 
-  useEffect(() => {
-    let active = true;
+  const loadData = useCallback(() => {
+    if (!id) return;
     getPassApi(id)
       .then((res) => {
-        if (!active) return;
         setData(res);
         setFav(Boolean(res.isFavorite));
       })
-      .catch(
-        (err) =>
-          active &&
-          setError(err.response?.data?.message || "Không tải được bài đăng"),
+      .catch((err) =>
+        setError(err.response?.data?.message || "Không tải được bài đăng"),
       );
-    return () => {
-      active = false;
-    };
-  }, [id, user?.id]);
+  }, [id]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData, user?.id]);
 
   const toggleFavorite = async () => {
     if (!user) return router.push("/login");
@@ -79,6 +120,54 @@ export default function PassDetailScreen() {
       await (next ? addFavoriteApi("pass", id) : removeFavoriteApi("pass", id));
     } catch {
       setFav(!next);
+    }
+  };
+
+  const handleDelete = () => {
+    Alert.alert(
+      "Xác nhận xóa bài đăng",
+      "Bạn có chắc chắn muốn xóa bài viết này không? Hành động này không thể hoàn tác.",
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xóa bài",
+          style: "destructive",
+          onPress: async () => {
+            setBusyAction(true);
+            try {
+              await deletePassApi(id);
+              Alert.alert("Thành công", "Đã xóa bài đăng.");
+              router.back();
+            } catch (err: any) {
+              Alert.alert(
+                "Lỗi",
+                err.response?.data?.message || "Không thể xóa bài đăng.",
+              );
+            } finally {
+              setBusyAction(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleSetStatus = async (status: "active" | "completed" | "closed") => {
+    setBusyAction(true);
+    try {
+      await setPassStatusApi(id, status);
+      Alert.alert(
+        "Thành công",
+        `Đã cập nhật trạng thái bài viết thành "${(PASS_STATUS_LABELS as any)[status] || status}".`,
+      );
+      loadData();
+    } catch (err: any) {
+      Alert.alert(
+        "Lỗi",
+        err.response?.data?.message || "Không thể cập nhật trạng thái.",
+      );
+    } finally {
+      setBusyAction(false);
     }
   };
 
@@ -97,7 +186,7 @@ export default function PassDetailScreen() {
   return (
     <ScrollView
       style={s.container}
-      contentContainerStyle={{ paddingBottom: bottom }}
+      contentContainerStyle={{ paddingBottom: bottom + 40 }}
     >
       <Stack.Screen
         options={{
@@ -109,10 +198,38 @@ export default function PassDetailScreen() {
       />
       <Gallery images={l.images} emoji="📦" />
 
+      {/* Thông tin chính */}
       <View style={s.section}>
         <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
           <Text style={s.badge}>{(PASS_TYPE_LABELS as any)[l.type]}</Text>
-          <Text style={s.muted}>{(PASS_STATUS_LABELS as any)[l.status]}</Text>
+          <View
+            style={[
+              s.statusPill,
+              {
+                backgroundColor:
+                  l.status === "active"
+                    ? "#064e3b"
+                    : l.status === "completed"
+                      ? "#312e81"
+                      : "#450a0a",
+              },
+            ]}
+          >
+            <Text
+              style={{
+                color:
+                  l.status === "active"
+                    ? "#6ee7b7"
+                    : l.status === "completed"
+                      ? "#a5b4fc"
+                      : "#fca5a5",
+                fontSize: 12,
+                fontWeight: "600",
+              }}
+            >
+              {(PASS_STATUS_LABELS as any)[l.status] || l.status}
+            </Text>
+          </View>
           {!isOwner && (
             <Pressable onPress={toggleFavorite} style={{ marginLeft: "auto" }}>
               <Text style={{ fontSize: 26 }}>{fav ? "❤️" : "🤍"}</Text>
@@ -124,6 +241,68 @@ export default function PassDetailScreen() {
         {l.area ? <Text style={s.muted}>📍 {l.area}</Text> : null}
       </View>
 
+      {/* KHỐI DÀNH RIÊNG CHO NGƯỜI SỞ HỮU BÀI ĐĂNG (CHỈNH SỬA / XÓA) */}
+      {isOwner && (
+        <View style={s.ownerCard}>
+          <Text style={s.ownerCardTitle}>⚙️ Quản lý bài đăng của bạn</Text>
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
+            <Pressable
+              style={s.editButton}
+              disabled={busyAction}
+              onPress={() => setShowEditModal(true)}
+            >
+              <Text style={s.editButtonText}>✏️ Chỉnh sửa tin</Text>
+            </Pressable>
+            <Pressable
+              style={s.deleteButton}
+              disabled={busyAction}
+              onPress={handleDelete}
+            >
+              <Text style={s.deleteButtonText}>🗑️ Xóa tin</Text>
+            </Pressable>
+          </View>
+
+          {/* Đổi trạng thái bài viết */}
+          <View style={{ marginTop: 12, borderTopWidth: 1, borderColor: themeColors.border, paddingTop: 10 }}>
+            <Text style={{ color: themeColors.muted, fontSize: 13, marginBottom: 8 }}>
+              Thay đổi trạng thái bài viết:
+            </Text>
+            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+              {l.status !== "completed" && (
+                <Pressable
+                  style={s.statusActionBtn}
+                  disabled={busyAction}
+                  onPress={() => handleSetStatus("completed")}
+                >
+                  <Text style={s.statusActionBtnText}>✓ Đã pass xong</Text>
+                </Pressable>
+              )}
+              {l.status !== "closed" && (
+                <Pressable
+                  style={s.statusActionBtn}
+                  disabled={busyAction}
+                  onPress={() => handleSetStatus("closed")}
+                >
+                  <Text style={s.statusActionBtnText}>✕ Đóng tin</Text>
+                </Pressable>
+              )}
+              {l.status !== "active" && (
+                <Pressable
+                  style={[s.statusActionBtn, { borderColor: themeColors.success }]}
+                  disabled={busyAction}
+                  onPress={() => handleSetStatus("active")}
+                >
+                  <Text style={[s.statusActionBtnText, { color: themeColors.success }]}>
+                    ↺ Mở lại bài đăng
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Mô tả */}
       {l.description ? (
         <View style={s.card}>
           <Text style={s.h2}>Mô tả</Text>
@@ -133,6 +312,7 @@ export default function PassDetailScreen() {
         </View>
       ) : null}
 
+      {/* Thông tin chi tiết */}
       <View style={s.card}>
         <Text style={s.h2}>Thông tin chi tiết</Text>
         {l.type === "room" ? (
@@ -167,20 +347,21 @@ export default function PassDetailScreen() {
           <>
             <CustomRow
               label="Danh mục"
-              value={(ITEM_CATEGORY_LABELS as any)[item.category]}
+              value={(ITEM_CATEGORY_LABELS as any)[item.category] || item.category}
             />
             <CustomRow
               label="Tình trạng"
-              value={(CONDITION_LABELS as any)[item.condition]}
+              value={(CONDITION_LABELS as any)[item.condition] || item.condition}
             />
             <CustomRow
               label="Hình thức"
-              value={(DEAL_LABELS as any)[item.dealType]}
+              value={(DEAL_LABELS as any)[item.dealType] || item.dealType}
             />
           </>
         )}
       </View>
 
+      {/* Người đăng */}
       <View style={s.card}>
         <Text style={s.h2}>Người đăng</Text>
         <Text
@@ -211,7 +392,431 @@ export default function PassDetailScreen() {
           </View>
         )}
       </View>
+
+      {/* Modal Chỉnh sửa bài đăng */}
+      {showEditModal && (
+        <EditPassModal
+          visible={showEditModal}
+          initialListing={l}
+          initialContact={contact || ""}
+          onClose={() => setShowEditModal(false)}
+          onSuccess={() => {
+            setShowEditModal(false);
+            loadData();
+          }}
+        />
+      )}
     </ScrollView>
+  );
+}
+
+// Modal chỉnh sửa bài đăng
+function EditPassModal({
+  visible,
+  initialListing,
+  initialContact,
+  onClose,
+  onSuccess,
+}: {
+  visible: boolean;
+  initialListing: any;
+  initialContact: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const isRoom = initialListing.type === "room";
+  const room = initialListing.roomInfo || {};
+  const item = initialListing.itemInfo || {};
+
+  const [title, setTitle] = useState(initialListing.title || "");
+  const [description, setDescription] = useState(initialListing.description || "");
+  const [price, setPrice] = useState(
+    initialListing.price != null ? String(initialListing.price) : "",
+  );
+  const [area, setArea] = useState(initialListing.area || "");
+  const [contact, setContact] = useState(initialContact || "");
+
+  // Room fields
+  const [address, setAddress] = useState(room.address || "");
+  const [deposit, setDeposit] = useState(
+    room.deposit != null ? String(room.deposit) : "",
+  );
+  const [remainingLeaseMonths, setRemainingLeaseMonths] = useState(
+    room.remainingLeaseMonths != null ? String(room.remainingLeaseMonths) : "",
+  );
+  const [availableFrom, setAvailableFrom] = useState(
+    room.availableFrom ? room.availableFrom.slice(0, 10) : "",
+  );
+  const [landlordAgreed, setLandlordAgreed] = useState(Boolean(room.landlordAgreed));
+  const [transferTerms, setTransferTerms] = useState(room.transferTerms || "");
+
+  // Item fields
+  const [category, setCategory] = useState(item.category || "furniture");
+  const [condition, setCondition] = useState(item.condition || "good");
+  const [dealType, setDealType] = useState(item.dealType || "sell");
+
+  // Images
+  const [images, setImages] = useState<string[]>(initialListing.images || []);
+  const [newImageAssets, setNewImageAssets] = useState<ImagePicker.ImagePickerAsset[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  const pickMoreImages = async () => {
+    const totalCount = images.length + newImageAssets.length;
+    if (totalCount >= 8) {
+      Alert.alert("Giới hạn", "Tối đa chỉ được chọn 8 hình ảnh.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsMultipleSelection: true,
+      selectionLimit: 8 - totalCount,
+      quality: 0.8,
+    });
+    if (!result.canceled) {
+      setNewImageAssets((prev) => [...prev, ...result.assets].slice(0, 8 - images.length));
+    }
+  };
+
+  const handleSave = async () => {
+    if (!title.trim() || title.trim().length < 3) {
+      Alert.alert("Lỗi", "Vui lòng nhập tiêu đề từ 3 ký tự trở lên.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // 1. Upload ảnh mới (nếu có)
+      let finalImages = [...images];
+      if (newImageAssets.length > 0) {
+        const files = newImageAssets.map((asset, i) => {
+          const filename =
+            asset.fileName ||
+            asset.uri.split("/").pop() ||
+            `edit_img_${Date.now()}_${i}.jpg`;
+          const match = /\.(\w+)$/.exec(filename);
+          const ext = match ? match[1].toLowerCase() : "jpg";
+          const mimeType =
+            ext === "png"
+              ? "image/png"
+              : ext === "webp"
+                ? "image/webp"
+                : "image/jpeg";
+          return {
+            uri: asset.uri,
+            name: filename.endsWith(`.${ext}`) ? filename : `${filename}.${ext}`,
+            type: mimeType,
+          } as any;
+        });
+        const uploadResult = await uploadImagesApi(files);
+        const uploadedUrls = Array.isArray(uploadResult)
+          ? uploadResult
+          : uploadResult.urls || [];
+        finalImages = [...finalImages, ...uploadedUrls];
+      }
+
+      // 2. Chuẩn bị payload đúng chuẩn backend
+      let payload: any;
+      if (isRoom) {
+        if (!address.trim()) {
+          Alert.alert("Lỗi", "Vui lòng nhập địa chỉ phòng.");
+          setSaving(false);
+          return;
+        }
+        const leaseMonths = remainingLeaseMonths.trim() !== "" ? Number(remainingLeaseMonths) : 0;
+        if (isNaN(leaseMonths) || leaseMonths < 0 || leaseMonths > 120) {
+          Alert.alert("Lỗi", "Số tháng hợp đồng còn lại phải từ 0 đến 120.");
+          setSaving(false);
+          return;
+        }
+
+        let availDate: string | null = null;
+        if (availableFrom.trim()) {
+          const raw = availableFrom.trim();
+          if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(raw)) {
+            const [d, m, y] = raw.split("/");
+            availDate = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+          } else if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+            availDate = raw;
+          } else {
+            const parsed = new Date(raw);
+            if (!isNaN(parsed.getTime())) {
+              availDate = parsed.toISOString().slice(0, 10);
+            }
+          }
+        }
+
+        payload = {
+          type: "room",
+          title: title.trim(),
+          description: description.trim(),
+          price: price ? Number(price) : null,
+          area: area.trim() || undefined,
+          contact: contact.trim() || undefined,
+          images: finalImages,
+          roomInfo: {
+            address: address.trim(),
+            deposit: deposit ? Number(deposit) : null,
+            remainingLeaseMonths: leaseMonths,
+            availableFrom: availDate,
+            landlordAgreed: Boolean(landlordAgreed),
+            transferTerms: transferTerms.trim() || undefined,
+          },
+        };
+      } else {
+        payload = {
+          type: "item",
+          title: title.trim(),
+          description: description.trim(),
+          price: dealType === "give_away" ? 0 : price ? Number(price) : null,
+          area: area.trim() || undefined,
+          contact: contact.trim() || undefined,
+          images: finalImages,
+          itemInfo: {
+            category,
+            condition,
+            dealType,
+          },
+        };
+      }
+
+      await updatePassApi(initialListing.id || initialListing._id, payload);
+      Alert.alert("Thành công", "Đã cập nhật bài đăng!");
+      onSuccess();
+    } catch (err: any) {
+      const errMsg =
+        err.response?.data?.errors?.[0]?.message ||
+        err.response?.data?.message ||
+        "Không thể cập nhật bài đăng.";
+      Alert.alert("Lỗi", errMsg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+      <View style={{ flex: 1, backgroundColor: themeColors.bg }}>
+        {/* Modal Header */}
+        <View style={sModal.header}>
+          <Pressable onPress={onClose} style={sModal.headerBtn}>
+            <Text style={{ color: themeColors.muted, fontSize: 16 }}>Hủy</Text>
+          </Pressable>
+          <Text style={sModal.headerTitle}>Chỉnh sửa bài Pass</Text>
+          <Pressable onPress={handleSave} disabled={saving} style={sModal.headerBtn}>
+            <Text style={{ color: themeColors.primary, fontSize: 16, fontWeight: "700" }}>
+              {saving ? "Lưu..." : "Lưu"}
+            </Text>
+          </Pressable>
+        </View>
+
+        <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 60 }}>
+          {/* Thông tin chính */}
+          <View style={sModal.card}>
+            <Text style={sModal.cardTitle}>Thông tin chính</Text>
+            <Text style={sModal.label}>Tiêu đề *</Text>
+            <TextInput
+              style={sModal.input}
+              value={title}
+              onChangeText={setTitle}
+              placeholder="Tiêu đề bài đăng..."
+              placeholderTextColor="#64748b"
+            />
+
+            <Text style={sModal.label}>Mô tả</Text>
+            <TextInput
+              style={[sModal.input, { height: 90, textAlignVertical: "top" }]}
+              value={description}
+              onChangeText={setDescription}
+              placeholder="Mô tả chi tiết..."
+              placeholderTextColor="#64748b"
+              multiline
+            />
+
+            <Text style={sModal.label}>
+              {isRoom ? "Giá thuê (VNĐ/tháng)" : dealType === "give_away" ? "Giá (0đ - Cho tặng)" : "Giá (VNĐ)"}
+            </Text>
+            <TextInput
+              style={[sModal.input, !isRoom && dealType === "give_away" && { opacity: 0.6 }]}
+              value={!isRoom && dealType === "give_away" ? "0" : price}
+              onChangeText={setPrice}
+              placeholder="Giá (VNĐ)"
+              placeholderTextColor="#64748b"
+              keyboardType="numeric"
+              editable={isRoom || dealType !== "give_away"}
+            />
+
+            <Text style={sModal.label}>Khu vực</Text>
+            <TextInput
+              style={sModal.input}
+              value={area}
+              onChangeText={setArea}
+              placeholder="Cầu Giấy, Hà Nội..."
+              placeholderTextColor="#64748b"
+            />
+
+            <Text style={sModal.label}>Thông tin liên hệ</Text>
+            <TextInput
+              style={sModal.input}
+              value={contact}
+              onChangeText={setContact}
+              placeholder="SĐT / Zalo: 0900000000"
+              placeholderTextColor="#64748b"
+            />
+          </View>
+
+          {/* Nếu là phòng */}
+          {isRoom ? (
+            <View style={sModal.card}>
+              <Text style={sModal.cardTitle}>Thông tin phòng</Text>
+              <Text style={sModal.label}>Địa chỉ phòng *</Text>
+              <TextInput
+                style={sModal.input}
+                value={address}
+                onChangeText={setAddress}
+                placeholder="Địa chỉ chi tiết..."
+                placeholderTextColor="#64748b"
+              />
+
+              <Text style={sModal.label}>Tiền cọc (VNĐ)</Text>
+              <TextInput
+                style={sModal.input}
+                value={deposit}
+                onChangeText={setDeposit}
+                keyboardType="numeric"
+                placeholder="Tiền cọc..."
+                placeholderTextColor="#64748b"
+              />
+
+              <Text style={sModal.label}>Số tháng hợp đồng còn lại (0 - 120) *</Text>
+              <TextInput
+                style={sModal.input}
+                value={remainingLeaseMonths}
+                onChangeText={setRemainingLeaseMonths}
+                keyboardType="numeric"
+                placeholder="VD: 5"
+                placeholderTextColor="#64748b"
+              />
+
+              <Text style={sModal.label}>Bàn giao từ ngày (YYYY-MM-DD)</Text>
+              <TextInput
+                style={sModal.input}
+                value={availableFrom}
+                onChangeText={setAvailableFrom}
+                placeholder="2026-11-01"
+                placeholderTextColor="#64748b"
+              />
+
+              <View style={sModal.switchRow}>
+                <Text style={{ color: themeColors.text, fontWeight: "600", flex: 1 }}>
+                  Chủ nhà đã đồng ý cho chuyển nhượng
+                </Text>
+                <Switch
+                  value={landlordAgreed}
+                  onValueChange={setLandlordAgreed}
+                  trackColor={{ false: "#334155", true: themeColors.primary }}
+                  thumbColor="#ffffff"
+                />
+              </View>
+
+              <Text style={sModal.label}>Điều khoản chuyển nhượng</Text>
+              <TextInput
+                style={[sModal.input, { height: 70, textAlignVertical: "top" }]}
+                value={transferTerms}
+                onChangeText={setTransferTerms}
+                placeholder="Điều khoản chuyển nhượng..."
+                placeholderTextColor="#64748b"
+                multiline
+              />
+            </View>
+          ) : (
+            <View style={sModal.card}>
+              <Text style={sModal.cardTitle}>Thông tin món đồ</Text>
+
+              <Text style={sModal.label}>Danh mục</Text>
+              <View style={sModal.chipWrap}>
+                {CATEGORY_OPTIONS.map((opt) => (
+                  <Pressable
+                    key={opt.key}
+                    style={[sModal.chip, category === opt.key && sModal.chipActive]}
+                    onPress={() => setCategory(opt.key)}
+                  >
+                    <Text style={[sModal.chipText, category === opt.key && sModal.chipTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Text style={sModal.label}>Tình trạng</Text>
+              <View style={sModal.chipWrap}>
+                {CONDITION_OPTIONS.map((opt) => (
+                  <Pressable
+                    key={opt.key}
+                    style={[sModal.chip, condition === opt.key && sModal.chipActive]}
+                    onPress={() => setCondition(opt.key)}
+                  >
+                    <Text style={[sModal.chipText, condition === opt.key && sModal.chipTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Text style={sModal.label}>Hình thức</Text>
+              <View style={sModal.chipWrap}>
+                {DEAL_OPTIONS.map((opt) => (
+                  <Pressable
+                    key={opt.key}
+                    style={[sModal.chip, dealType === opt.key && sModal.chipActive]}
+                    onPress={() => setDealType(opt.key)}
+                  >
+                    <Text style={[sModal.chipText, dealType === opt.key && sModal.chipTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Quản lý ảnh */}
+          <View style={sModal.card}>
+            <Text style={sModal.cardTitle}>Hình ảnh ({images.length + newImageAssets.length}/8)</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginTop: 10 }}>
+              <Pressable style={sModal.uploadBox} onPress={pickMoreImages}>
+                <Text style={{ color: themeColors.primary, fontSize: 24 }}>+</Text>
+                <Text style={{ color: themeColors.muted, fontSize: 11 }}>Thêm ảnh</Text>
+              </Pressable>
+
+              {/* Ảnh hiện có */}
+              {images.map((url, i) => (
+                <View key={`exist-${i}`} style={sModal.imgBox}>
+                  <Image source={{ uri: url }} style={sModal.img} />
+                  <Pressable style={sModal.delBadge} onPress={() => setImages((prev) => prev.filter((_, idx) => idx !== i))}>
+                    <Text style={{ color: "#fff", fontSize: 10, fontWeight: "700" }}>✕</Text>
+                  </Pressable>
+                </View>
+              ))}
+
+              {/* Ảnh mới chọn */}
+              {newImageAssets.map((asset, i) => (
+                <View key={`new-${i}`} style={sModal.imgBox}>
+                  <Image source={{ uri: asset.uri }} style={sModal.img} />
+                  <Pressable style={sModal.delBadge} onPress={() => setNewImageAssets((prev) => prev.filter((_, idx) => idx !== i))}>
+                    <Text style={{ color: "#fff", fontSize: 10, fontWeight: "700" }}>✕</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* Nút lưu */}
+          <Pressable style={[sModal.saveBtn, saving && { opacity: 0.6 }]} disabled={saving} onPress={handleSave}>
+            <Text style={sModal.saveBtnText}>{saving ? "Đang lưu thay đổi..." : "Lưu thay đổi bài đăng"}</Text>
+          </Pressable>
+        </ScrollView>
+      </View>
+    </Modal>
   );
 }
 
@@ -254,6 +859,59 @@ const s = StyleSheet.create({
     padding: 16,
     gap: 8,
   },
+  ownerCard: {
+    backgroundColor: "#1e1b4b",
+    borderWidth: 1,
+    borderColor: themeColors.primary,
+    marginHorizontal: 12,
+    marginBottom: 12,
+    borderRadius: 16,
+    padding: 16,
+  },
+  ownerCardTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#a5b4fc",
+  },
+  editButton: {
+    flex: 1,
+    backgroundColor: themeColors.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  editButtonText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  deleteButton: {
+    flex: 1,
+    backgroundColor: "#450a0a",
+    borderWidth: 1,
+    borderColor: themeColors.danger,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  deleteButtonText: {
+    color: "#fca5a5",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  statusActionBtn: {
+    backgroundColor: themeColors.card,
+    borderWidth: 1,
+    borderColor: themeColors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  statusActionBtnText: {
+    color: themeColors.text,
+    fontSize: 12,
+    fontWeight: "600",
+  },
   badge: {
     backgroundColor: themeColors.primary,
     color: "#fff",
@@ -263,6 +921,11 @@ const s = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 10,
     overflow: "hidden",
+  },
+  statusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
   },
   title: {
     fontSize: 22,
@@ -287,4 +950,136 @@ const s = StyleSheet.create({
   },
   buttonText: { color: "#fff", fontWeight: "600" },
   error: { margin: 20, color: themeColors.danger, textAlign: "center" },
+});
+
+const sModal = StyleSheet.create({
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: themeColors.border,
+    backgroundColor: themeColors.card,
+  },
+  headerBtn: {
+    padding: 4,
+  },
+  headerTitle: {
+    color: themeColors.text,
+    fontSize: 17,
+    fontWeight: "700",
+  },
+  card: {
+    backgroundColor: themeColors.card,
+    borderWidth: 1,
+    borderColor: themeColors.border,
+    borderRadius: 16,
+    padding: 14,
+    gap: 8,
+  },
+  cardTitle: {
+    color: themeColors.text,
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  label: {
+    color: themeColors.muted,
+    fontSize: 13,
+    marginTop: 6,
+  },
+  input: {
+    backgroundColor: themeColors.bg,
+    borderWidth: 1,
+    borderColor: themeColors.border,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    color: themeColors.text,
+    fontSize: 14,
+  },
+  switchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: themeColors.bg,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: themeColors.border,
+    marginTop: 6,
+  },
+  chipWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 4,
+  },
+  chip: {
+    backgroundColor: themeColors.bg,
+    borderWidth: 1,
+    borderColor: themeColors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  chipActive: {
+    backgroundColor: themeColors.primary,
+    borderColor: themeColors.primary,
+  },
+  chipText: {
+    color: themeColors.muted,
+    fontSize: 13,
+  },
+  chipTextActive: {
+    color: "#fff",
+    fontWeight: "600",
+  },
+  uploadBox: {
+    width: 70,
+    height: 70,
+    backgroundColor: themeColors.bg,
+    borderWidth: 1,
+    borderColor: themeColors.primary,
+    borderStyle: "dashed",
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  imgBox: {
+    width: 70,
+    height: 70,
+    borderRadius: 10,
+    overflow: "hidden",
+    position: "relative",
+  },
+  img: {
+    width: "100%",
+    height: "100%",
+  },
+  delBadge: {
+    position: "absolute",
+    top: 3,
+    right: 3,
+    backgroundColor: themeColors.danger,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  saveBtn: {
+    backgroundColor: themeColors.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  saveBtnText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 16,
+  },
 });

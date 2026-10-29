@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { imageUrl } from "../api/axios";
 import {
   PASS_TYPE_LABELS,
@@ -9,9 +10,33 @@ import {
 } from "../utils/labels";
 import { colors, shared } from "./ui";
 
+/**
+ * Hook tính chiều cao ảnh theo tỉ lệ thực tế của ảnh đầu tiên.
+ * Nếu không lấy được, trả về giá trị mặc định.
+ */
+function useImageAspectHeight(uri: string | undefined, containerWidth: number, fallback = 220) {
+  const [height, setHeight] = useState(fallback);
+  useEffect(() => {
+    if (!uri) return;
+    Image.getSize(
+      uri,
+      (w, h) => {
+        if (w > 0) setHeight(Math.round((h / w) * containerWidth));
+      },
+      () => setHeight(fallback),
+    );
+  }, [uri, containerWidth, fallback]);
+  return height;
+}
+
 // 1. CARD PHÒNG TRỌ (Accommodation)
 export function AccommodationCard({ item }: { item: any }) {
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
+  const cardWidth = screenWidth - 24; // trừ padding ngang 12*2
+  const firstImage = item.images?.[0] ? (imageUrl(item.images[0]) as string) : undefined;
+  const imgHeight = useImageAspectHeight(firstImage, cardWidth);
+
   const id = item.id || item._id;
   const sub = [
     item.address?.district,
@@ -31,13 +56,14 @@ export function AccommodationCard({ item }: { item: any }) {
         })
       }
     >
-      {item.images?.[0] ? (
+      {firstImage ? (
         <Image
-          source={{ uri: imageUrl(item.images[0]) as string }}
-          style={s.cover}
+          source={{ uri: firstImage }}
+          style={{ width: "100%", height: imgHeight, backgroundColor: "#334155" }}
+          resizeMode="contain"
         />
       ) : (
-        <View style={[s.cover, s.coverEmpty]}>
+        <View style={[{ width: "100%", height: 180, backgroundColor: "#334155" }, s.coverEmpty]}>
           <Text style={{ fontSize: 40 }}>🏠</Text>
         </View>
       )}
@@ -58,6 +84,11 @@ export function AccommodationCard({ item }: { item: any }) {
 // 2. CARD PASS ĐỒ (PassCard)
 export function PassCard({ item }: { item: any }) {
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
+  const cardWidth = screenWidth - 24;
+  const firstImage = item.images?.[0] ? (imageUrl(item.images[0]) as string) : undefined;
+  const imgHeight = useImageAspectHeight(firstImage, cardWidth);
+
   const id = item.id || item._id;
 
   return (
@@ -67,13 +98,14 @@ export function PassCard({ item }: { item: any }) {
         router.push({ pathname: "/pass/[id]", params: { id: String(id) } })
       }
     >
-      {item.images?.[0] ? (
+      {firstImage ? (
         <Image
-          source={{ uri: imageUrl(item.images[0]) as string }}
-          style={s.cover}
+          source={{ uri: firstImage }}
+          style={{ width: "100%", height: imgHeight, backgroundColor: "#334155" }}
+          resizeMode="contain"
         />
       ) : (
-        <View style={[s.cover, s.coverEmpty]}>
+        <View style={[{ width: "100%", height: 180, backgroundColor: "#334155" }, s.coverEmpty]}>
           <Text style={{ fontSize: 40 }}>📦</Text>
         </View>
       )}
@@ -155,7 +187,6 @@ const s = StyleSheet.create({
     borderColor: "#334155",
     overflow: "hidden",
   },
-  cover: { width: "100%", height: 180, backgroundColor: "#334155" },
   coverEmpty: { alignItems: "center", justifyContent: "center" },
   badge: {
     alignSelf: "flex-start",
@@ -168,7 +199,7 @@ const s = StyleSheet.create({
     overflow: "hidden",
     fontWeight: "600",
   },
-  price: { fontSize: 17, fontWeight: "700", color: "#818cf8" }, // Dùng màu tím sáng nổi bật cho giá
+  price: { fontSize: 17, fontWeight: "700", color: "#818cf8" },
   title: { fontSize: 16, fontWeight: "600", color: "#f8fafc" },
   muted: { color: "#94a3b8", fontSize: 13, fontWeight: "400" },
 

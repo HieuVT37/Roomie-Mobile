@@ -1,5 +1,6 @@
 import * as ImagePicker from "expo-image-picker";
-import { useRef, useState } from "react";
+import { useRouter } from "expo-router";
+import { useCallback, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -13,13 +14,24 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { createPassApi, listPassApi, myPassApi } from "../../api/pass";
+import {
+  createPassApi,
+  deletePassApi,
+  listPassApi,
+  myPassApi,
+} from "../../api/pass";
+import { uploadImagesApi } from "../../api/uploads";
 import { PassCard } from "../../components/cards";
 import { Loading, Segments, shared } from "../../components/ui";
 import {
   useInfiniteList,
   useTabPressScrollTop,
 } from "../../hooks/use-infinite-list";
+import {
+  CONDITION_LABELS,
+  DEAL_LABELS,
+  ITEM_CATEGORY_LABELS,
+} from "../../utils/labels";
 
 const themeColors = {
   bg: "#0f172a",
@@ -28,52 +40,132 @@ const themeColors = {
   text: "#f8fafc",
   muted: "#94a3b8",
   primary: "#6366f1",
+  danger: "#ef4444",
+  success: "#10b981",
+  warning: "#d97706",
 };
 
+// Đồng bộ chính xác với backend Enum
 const CATEGORY_OPTIONS = [
-  { key: "furniture", label: "Nội thất" },
-  { key: "appliance", label: "Gia dụng" },
-  { key: "electronics", label: "Điện tử" },
-  { key: "other", label: "Khác" },
+  { key: "furniture", label: ITEM_CATEGORY_LABELS.furniture || "Nội thất" },
+  { key: "appliance", label: ITEM_CATEGORY_LABELS.appliance || "Đồ điện" },
+  { key: "kitchen", label: ITEM_CATEGORY_LABELS.kitchen || "Đồ bếp" },
+  { key: "storage", label: ITEM_CATEGORY_LABELS.storage || "Đồ lưu trữ" },
+  { key: "other", label: ITEM_CATEGORY_LABELS.other || "Khác" },
 ];
 
 const CONDITION_OPTIONS = [
-  { key: "new", label: "Mới 100%" },
-  { key: "like_new", label: "Tốt" },
-  { key: "used", label: "Đã qua sử dụng" },
+  { key: "new", label: CONDITION_LABELS.new || "Mới 100%" },
+  { key: "like_new", label: CONDITION_LABELS.like_new || "Như mới" },
+  { key: "good", label: CONDITION_LABELS.good || "Tốt" },
+  { key: "fair", label: CONDITION_LABELS.fair || "Khá" },
+  { key: "old", label: CONDITION_LABELS.old || "Cũ" },
 ];
 
 const DEAL_OPTIONS = [
-  { key: "sell", label: "Bán" },
-  { key: "giveaway", label: "Tặng miễn phí" },
+  { key: "sell", label: DEAL_LABELS.sell || "Bán" },
+  { key: "give_away", label: DEAL_LABELS.give_away || "Cho tặng" },
+  { key: "exchange", label: DEAL_LABELS.exchange || "Trao đổi" },
 ];
 
 export default function PassListScreen() {
+  const router = useRouter();
   const [tab, setTab] = useState("room");
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
+  // Danh sách các bài pass vừa tạo trên client để luôn hiển thị ngay lập tức
+  const [recentCreated, setRecentCreated] = useState<any[]>([]);
 
   const listRef = useRef<FlatList>(null);
   useTabPressScrollTop(listRef);
 
-  const list = useInfiniteList(
-    (p) =>
-      tab === "mine"
-        ? myPassApi()
-        : listPassApi({
-            page: p,
-            limit: 12,
-            q,
-            type: tab === "room" || tab === "item" ? tab : undefined,
-          }),
+  const fetchItems = useCallback(
+    async (p: number) => {
+      if (tab === "mine") {
+        return myPassApi();
+      }
+      return listPassApi({
+        page: p,
+        limit: 12,
+        q,
+        type: tab === "room" || tab === "item" ? tab : undefined,
+      });
+    },
     [q, tab],
   );
+
+  const list = useInfiniteList(fetchItems, [q, tab]);
+
+  // Hợp nhất bài vừa tạo vào danh sách hiển thị
+  const displayItems = (() => {
+    const serverItems = list.items || [];
+    if (tab === "create") return [];
+
+    // Lọc các bài vừa tạo khớp với tab hiện tại
+    const relevantRecent = recentCreated.filter((item) => {
+      if (tab === "mine") return true;
+      if (tab === "room") return item.type === "room";
+      if (tab === "item") return item.type === "item";
+      return true;
+    });
+
+    // Tránh trùng lặp id
+    const existingIds = new Set(
+      serverItems.map((it: any) => String(it.id || it._id)),
+    );
+    const uniqueRecent = relevantRecent.filter(
+      (it: any) => !existingIds.has(String(it.id || it._id)),
+    );
+
+    return [...uniqueRecent, ...serverItems];
+  })();
+
+  const handleCreatedSuccess = (
+    createdItem: any,
+    createdType: "room" | "item",
+  ) => {
+    if (createdItem) {
+      setRecentCreated((prev) => [createdItem, ...prev]);
+    }
+    // Chuyển ngay đến tab tương ứng để người dùng thấy bài vừa đăng
+    setTab(createdType);
+  };
+
+  const handleDeleteMine = (item: any) => {
+    const id = item.id || item._id;
+    Alert.alert("Xác nhận xóa", `Bạn có chắc muốn xóa bài "${item.title}"?`, [
+      { text: "Hủy", style: "cancel" },
+      {
+        text: "Xóa",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await deletePassApi(id);
+            setRecentCreated((prev) =>
+              prev.filter((it) => String(it.id || it._id) !== String(id)),
+            );
+            list.refresh();
+            Alert.alert("Thành công", "Đã xóa bài pass.");
+          } catch (err: any) {
+            Alert.alert(
+              "Lỗi",
+              err.response?.data?.message || "Không thể xóa bài pass.",
+            );
+          }
+        },
+      },
+    ]);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: themeColors.bg }}>
       <Segments
         value={tab}
-        onChange={setTab}
+        onChange={(newTab) => {
+          setTab(newTab);
+          setText("");
+          setQ("");
+        }}
         options={[
           { key: "room", label: "Pass phòng" },
           { key: "item", label: "Pass đồ" },
@@ -83,7 +175,7 @@ export default function PassListScreen() {
       />
 
       {tab === "create" ? (
-        <CreatePassForm onSuccess={() => setTab("mine")} />
+        <CreatePassForm onSuccess={handleCreatedSuccess} />
       ) : (
         <>
           {(tab === "room" || tab === "item") && (
@@ -91,8 +183,8 @@ export default function PassListScreen() {
               style={s.searchBox}
               placeholder={
                 tab === "room"
-                  ? "Tìm kiếm phòng trọ..."
-                  : "Tìm kiếm đồ dùng đang pass..."
+                  ? "Tìm kiếm theo khu vực (quận, phường)..."
+                  : "Tìm kiếm món đồ..."
               }
               placeholderTextColor="#64748b"
               value={text}
@@ -107,8 +199,8 @@ export default function PassListScreen() {
             <FlatList
               style={{ flex: 1, backgroundColor: themeColors.bg }}
               ref={listRef}
-              data={list.items}
-              keyExtractor={(it) => it.id}
+              data={displayItems}
+              keyExtractor={(it) => String(it.id || it._id || Math.random())}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ padding: 12, gap: 12 }}
               refreshControl={
@@ -131,7 +223,65 @@ export default function PassListScreen() {
                         : "Chưa có bài Pass đồ nào.")}
                 </Text>
               }
-              renderItem={({ item }) => <PassCard item={item} />}
+              renderItem={({ item }) => (
+                <View>
+                  <PassCard item={item} />
+                  {/* Nếu ở tab Tin của tôi, hiển thị thanh quản lý Sửa / Xóa */}
+                  {tab === "mine" && (
+                    <View style={s.mineActionRow}>
+                      <View
+                        style={{
+                          flex: 1,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        <View
+                          style={[
+                            s.dotStatus,
+                            {
+                              backgroundColor:
+                                item.moderationStatus === "approved"
+                                  ? themeColors.success
+                                  : item.moderationStatus === "rejected"
+                                    ? themeColors.danger
+                                    : themeColors.warning,
+                            },
+                          ]}
+                        />
+                        <Text style={s.moderationText}>
+                          {item.moderationStatus === "approved"
+                            ? "Đã duyệt công khai"
+                            : item.moderationStatus === "rejected"
+                              ? "Bị từ chối"
+                              : "Đang hiển thị"}
+                        </Text>
+                      </View>
+                      <Pressable
+                        style={s.mineEditBtn}
+                        onPress={() =>
+                          router.push({
+                            pathname: "/pass/[id]",
+                            params: {
+                              id: String(item.id || item._id),
+                              edit: "true",
+                            },
+                          })
+                        }
+                      >
+                        <Text style={s.mineEditBtnText}> Sửa</Text>
+                      </Pressable>
+                      <Pressable
+                        style={s.mineDeleteBtn}
+                        onPress={() => handleDeleteMine(item)}
+                      >
+                        <Text style={s.mineDeleteBtnText}>Xóa</Text>
+                      </Pressable>
+                    </View>
+                  )}
+                </View>
+              )}
             />
           )}
         </>
@@ -140,7 +290,11 @@ export default function PassListScreen() {
   );
 }
 
-function CreatePassForm({ onSuccess }: { onSuccess: () => void }) {
+function CreatePassForm({
+  onSuccess,
+}: {
+  onSuccess: (createdItem: any, type: "room" | "item") => void;
+}) {
   const [type, setType] = useState<"item" | "room">("room");
 
   // State riêng biệt cho Pass phòng
@@ -166,16 +320,18 @@ function CreatePassForm({ onSuccess }: { onSuccess: () => void }) {
     location: "",
     contact: "",
     category: "furniture",
-    condition: "new",
+    condition: "good",
     dealType: "sell",
   });
 
-  // Hình ảnh
-  const [images, setImages] = useState<string[]>([]);
+  // Hình ảnh (lưu thông tin asset từ ImagePicker)
+  const [imageAssets, setImageAssets] = useState<
+    ImagePicker.ImagePickerAsset[]
+  >([]);
   const [loading, setLoading] = useState(false);
 
   const pickImages = async () => {
-    if (images.length >= 8) {
+    if (imageAssets.length >= 8) {
       Alert.alert("Giới hạn", "Tối đa chỉ được chọn 8 hình ảnh.");
       return;
     }
@@ -183,32 +339,99 @@ function CreatePassForm({ onSuccess }: { onSuccess: () => void }) {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsMultipleSelection: true,
-      selectionLimit: 8 - images.length,
+      selectionLimit: 8 - imageAssets.length,
       quality: 0.8,
     });
 
     if (!result.canceled) {
-      const selectedUris = result.assets.map((a) => a.uri);
-      setImages((prev) => [...prev, ...selectedUris].slice(0, 8));
+      setImageAssets((prev) => [...prev, ...result.assets].slice(0, 8));
     }
   };
 
   const removeImage = (index: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== index));
+    setImageAssets((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async () => {
     const currentTitle = type === "room" ? roomForm.title : itemForm.title;
-    if (!currentTitle.trim()) {
-      Alert.alert("Thiếu thông tin", "Vui lòng nhập tiêu đề bài pass.");
+    if (!currentTitle.trim() || currentTitle.trim().length < 3) {
+      Alert.alert(
+        "Thiếu thông tin",
+        "Vui lòng nhập tiêu đề từ 3 ký tự trở lên.",
+      );
       return;
     }
 
     setLoading(true);
     try {
+      // 1. Upload ảnh lên server (nếu có chọn)
+      let uploadedImageUrls: string[] = [];
+      if (imageAssets.length > 0) {
+        const files = imageAssets.map((asset, index) => {
+          const filename =
+            asset.fileName ||
+            asset.uri.split("/").pop() ||
+            `image_${Date.now()}_${index}.jpg`;
+          const match = /\.(\w+)$/.exec(filename);
+          const ext = match ? match[1].toLowerCase() : "jpg";
+          const mimeType =
+            ext === "png"
+              ? "image/png"
+              : ext === "webp"
+                ? "image/webp"
+                : "image/jpeg";
+          return {
+            uri: asset.uri,
+            name: filename.endsWith(`.${ext}`)
+              ? filename
+              : `${filename}.${ext}`,
+            type: mimeType,
+          } as any;
+        });
+        const uploadResult = await uploadImagesApi(files);
+        uploadedImageUrls = Array.isArray(uploadResult)
+          ? uploadResult
+          : uploadResult.urls || [];
+      }
+
+      // 2. Chuẩn bị payload hợp lệ đúng 100% với backend validator
       let payload: any;
 
       if (type === "room") {
+        if (!roomForm.address.trim()) {
+          Alert.alert("Thiếu thông tin", "Vui lòng nhập địa chỉ phòng.");
+          setLoading(false);
+          return;
+        }
+
+        const leaseMonths =
+          roomForm.remainingLeaseMonths.trim() !== ""
+            ? Number(roomForm.remainingLeaseMonths)
+            : 0;
+
+        if (isNaN(leaseMonths) || leaseMonths < 0 || leaseMonths > 120) {
+          Alert.alert("Lỗi", "Số tháng hợp đồng còn lại phải từ 0 đến 120.");
+          setLoading(false);
+          return;
+        }
+
+        // Format availableFrom chuẩn YYYY-MM-DD
+        let availDate: string | null = null;
+        if (roomForm.availableFrom.trim()) {
+          const raw = roomForm.availableFrom.trim();
+          if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(raw)) {
+            const [d, m, y] = raw.split("/");
+            availDate = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+          } else if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+            availDate = raw;
+          } else {
+            const parsed = new Date(raw);
+            if (!isNaN(parsed.getTime())) {
+              availDate = parsed.toISOString().slice(0, 10);
+            }
+          }
+        }
+
         payload = {
           type: "room",
           title: roomForm.title.trim(),
@@ -216,15 +439,13 @@ function CreatePassForm({ onSuccess }: { onSuccess: () => void }) {
           price: roomForm.price ? Number(roomForm.price) : null,
           area: roomForm.location.trim() || undefined,
           contact: roomForm.contact.trim() || undefined,
-          images,
+          images: uploadedImageUrls,
           roomInfo: {
-            address: roomForm.address.trim() || undefined,
+            address: roomForm.address.trim(),
             deposit: roomForm.deposit ? Number(roomForm.deposit) : null,
-            remainingLeaseMonths: roomForm.remainingLeaseMonths
-              ? Number(roomForm.remainingLeaseMonths)
-              : null,
-            availableFrom: roomForm.availableFrom.trim() || null,
-            landlordAgreed: roomForm.landlordAgreed,
+            remainingLeaseMonths: leaseMonths,
+            availableFrom: availDate,
+            landlordAgreed: Boolean(roomForm.landlordAgreed),
             transferTerms: roomForm.transferTerms.trim() || undefined,
           },
         };
@@ -234,14 +455,14 @@ function CreatePassForm({ onSuccess }: { onSuccess: () => void }) {
           title: itemForm.title.trim(),
           description: itemForm.description.trim(),
           price:
-            itemForm.dealType === "giveaway"
+            itemForm.dealType === "give_away"
               ? 0
               : itemForm.price
                 ? Number(itemForm.price)
                 : null,
           area: itemForm.location.trim() || undefined,
-          contact: itemForm.location.trim() || undefined,
-          images,
+          contact: itemForm.contact.trim() || undefined,
+          images: uploadedImageUrls,
           itemInfo: {
             category: itemForm.category,
             condition: itemForm.condition,
@@ -250,14 +471,21 @@ function CreatePassForm({ onSuccess }: { onSuccess: () => void }) {
         };
       }
 
-      await createPassApi(payload);
-      Alert.alert("Thành công", "Đã đăng bài pass mới thành công!");
-      onSuccess();
-    } catch (err: any) {
+      const res = await createPassApi(payload);
+      const createdListing = res?.listing || res;
+
       Alert.alert(
-        "Lỗi",
-        err.response?.data?.message || "Không thể tạo bài pass.",
+        "Thành công",
+        "Đã đăng bài pass mới thành công! Bài viết đã sẵn sàng hiển thị.",
       );
+
+      onSuccess(createdListing, type);
+    } catch (err: any) {
+      const errMsg =
+        err.response?.data?.errors?.[0]?.message ||
+        err.response?.data?.message ||
+        "Không thể tạo bài pass. Vui lòng kiểm tra lại thông tin.";
+      Alert.alert("Lỗi", errMsg);
     } finally {
       setLoading(false);
     }
@@ -281,16 +509,18 @@ function CreatePassForm({ onSuccess }: { onSuccess: () => void }) {
         </Pressable>
       </View>
 
-      {/* 2. Thông tin chính (Độc lập cho từng tab) */}
+      {/* 2. Thông tin chính */}
       <View style={s.sectionCard}>
         <Text style={s.sectionTitle}>Thông tin chính</Text>
         <View style={{ gap: 10, marginTop: 10 }}>
-          <Text style={s.fieldLabel}>Tiêu đề</Text>
+          <Text style={s.fieldLabel}>
+            Tiêu đề <Text style={{ color: themeColors.danger }}>*</Text>
+          </Text>
           <TextInput
             style={s.input}
             placeholder={
               type === "room"
-                ? "Pass phòng trọ..."
+                ? "Pass phòng trọ 25m² Cầu Giấy, đủ đồ..."
                 : "Bàn học gỗ + ghế, còn mới 90%"
             }
             placeholderTextColor="#64748b"
@@ -305,7 +535,7 @@ function CreatePassForm({ onSuccess }: { onSuccess: () => void }) {
           <Text style={s.fieldLabel}>Mô tả</Text>
           <TextInput
             style={[s.input, { height: 100, textAlignVertical: "top" }]}
-            placeholder="Mô tả chi tiết..."
+            placeholder="Mô tả chi tiết phòng / món đồ cần pass..."
             placeholderTextColor="#64748b"
             multiline
             value={
@@ -319,14 +549,29 @@ function CreatePassForm({ onSuccess }: { onSuccess: () => void }) {
           />
 
           <Text style={s.fieldLabel}>
-            {type === "room" ? "Giá thuê (VNĐ/tháng)" : "Giá bán (VNĐ)"}
+            {type === "room"
+              ? "Giá thuê (VNĐ/tháng)"
+              : itemForm.dealType === "give_away"
+                ? "Giá (0đ - Cho tặng)"
+                : "Giá bán (VNĐ, để trống nếu thỏa thuận)"}
           </Text>
           <TextInput
-            style={s.input}
-            placeholder="Giá (để trống nếu thỏa thuận)"
+            style={[
+              s.input,
+              type === "item" &&
+                itemForm.dealType === "give_away" && { opacity: 0.6 },
+            ]}
+            placeholder="Giá (VNĐ)"
             placeholderTextColor="#64748b"
             keyboardType="numeric"
-            value={type === "room" ? roomForm.price : itemForm.price}
+            editable={type === "room" || itemForm.dealType !== "give_away"}
+            value={
+              type === "room"
+                ? roomForm.price
+                : itemForm.dealType === "give_away"
+                  ? "0"
+                  : itemForm.price
+            }
             onChangeText={(val) =>
               type === "room"
                 ? setRoomForm({ ...roomForm, price: val })
@@ -334,10 +579,10 @@ function CreatePassForm({ onSuccess }: { onSuccess: () => void }) {
             }
           />
 
-          <Text style={s.fieldLabel}>Khu vực</Text>
+          <Text style={s.fieldLabel}>Khu vực (quận, thành phố)</Text>
           <TextInput
             style={s.input}
-            placeholder="Thanh Xuân, Hà Nội"
+            placeholder="Cầu Giấy, Hà Nội"
             placeholderTextColor="#64748b"
             value={type === "room" ? roomForm.location : itemForm.location}
             onChangeText={(val) =>
@@ -348,11 +593,11 @@ function CreatePassForm({ onSuccess }: { onSuccess: () => void }) {
           />
 
           <Text style={s.fieldLabel}>
-            Thông tin liên hệ (chỉ người đã đăng nhập mới thấy)
+            Thông tin liên hệ (SĐT, Zalo - chỉ hiển thị với người đã đăng nhập)
           </Text>
           <TextInput
             style={s.input}
-            placeholder="Zalo: 0900000000"
+            placeholder="SĐT / Zalo: 0900000000"
             placeholderTextColor="#64748b"
             value={type === "room" ? roomForm.contact : itemForm.contact}
             onChangeText={(val) =>
@@ -369,10 +614,13 @@ function CreatePassForm({ onSuccess }: { onSuccess: () => void }) {
         <View style={s.sectionCard}>
           <Text style={s.sectionTitle}>Thông tin phòng</Text>
           <View style={{ gap: 10, marginTop: 10 }}>
-            <Text style={s.fieldLabel}>Địa chỉ phòng</Text>
+            <Text style={s.fieldLabel}>
+              Địa chỉ chi tiết của phòng{" "}
+              <Text style={{ color: themeColors.danger }}>*</Text>
+            </Text>
             <TextInput
               style={s.input}
-              placeholder="Nhập địa chỉ chi tiết..."
+              placeholder="VD: Số 12 ngõ 45 Cầu Giấy, Hà Nội"
               placeholderTextColor="#64748b"
               value={roomForm.address}
               onChangeText={(val) => setRoomForm({ ...roomForm, address: val })}
@@ -381,17 +629,20 @@ function CreatePassForm({ onSuccess }: { onSuccess: () => void }) {
             <Text style={s.fieldLabel}>Tiền cọc (VNĐ)</Text>
             <TextInput
               style={s.input}
-              placeholder="Nhập số tiền cọc..."
+              placeholder="VD: 3000000"
               placeholderTextColor="#64748b"
               keyboardType="numeric"
               value={roomForm.deposit}
               onChangeText={(val) => setRoomForm({ ...roomForm, deposit: val })}
             />
 
-            <Text style={s.fieldLabel}>Hợp đồng còn lại (tháng)</Text>
+            <Text style={s.fieldLabel}>
+              Số tháng hợp đồng còn lại (0 - 120){" "}
+              <Text style={{ color: themeColors.danger }}>*</Text>
+            </Text>
             <TextInput
               style={s.input}
-              placeholder="VD: 5"
+              placeholder="VD: 6 (tháng)"
               placeholderTextColor="#64748b"
               keyboardType="numeric"
               value={roomForm.remainingLeaseMonths}
@@ -400,10 +651,10 @@ function CreatePassForm({ onSuccess }: { onSuccess: () => void }) {
               }
             />
 
-            <Text style={s.fieldLabel}>Bàn giao từ ngày</Text>
+            <Text style={s.fieldLabel}>Bàn giao từ ngày (dd/mm/yyyy)</Text>
             <TextInput
               style={s.input}
-              placeholder="dd/mm/yyyy"
+              placeholder="VD: 01/11/2026 hoặc 2026-11-01"
               placeholderTextColor="#64748b"
               value={roomForm.availableFrom}
               onChangeText={(val) =>
@@ -432,8 +683,8 @@ function CreatePassForm({ onSuccess }: { onSuccess: () => void }) {
 
             <Text style={s.fieldLabel}>Điều khoản chuyển nhượng</Text>
             <TextInput
-              style={[s.input, { height: 90, textAlignVertical: "top" }]}
-              placeholder="Bên nhận chuyển lại phần tiền cọc cho bên pass..."
+              style={[s.input, { height: 80, textAlignVertical: "top" }]}
+              placeholder="VD: Bên nhận chuyển lại tiền cọc cho bên pass..."
               placeholderTextColor="#64748b"
               multiline
               value={roomForm.transferTerms}
@@ -514,7 +765,7 @@ function CreatePassForm({ onSuccess }: { onSuccess: () => void }) {
 
       {/* 4. Hình ảnh */}
       <View style={s.sectionCard}>
-        <Text style={s.sectionTitle}>Hình ảnh</Text>
+        <Text style={s.sectionTitle}>Hình ảnh ({imageAssets.length}/8)</Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -527,9 +778,9 @@ function CreatePassForm({ onSuccess }: { onSuccess: () => void }) {
             </Text>
           </Pressable>
 
-          {images.map((uri, idx) => (
+          {imageAssets.map((asset, idx) => (
             <View key={idx} style={s.imageWrapper}>
-              <Image source={{ uri }} style={s.previewImage} />
+              <Image source={{ uri: asset.uri }} style={s.previewImage} />
               <Pressable style={s.removeBadge} onPress={() => removeImage(idx)}>
                 <Text
                   style={{ color: "#fff", fontSize: 10, fontWeight: "700" }}
@@ -541,7 +792,7 @@ function CreatePassForm({ onSuccess }: { onSuccess: () => void }) {
           ))}
         </ScrollView>
         <Text style={{ color: themeColors.muted, fontSize: 12, marginTop: 6 }}>
-          JPG, PNG hoặc WebP, tối đa 5MB mỗi ảnh, tối đa 8 ảnh.
+          JPG, PNG hoặc WebP, tối đa 8 ảnh.
         </Text>
       </View>
 
@@ -551,7 +802,7 @@ function CreatePassForm({ onSuccess }: { onSuccess: () => void }) {
         onPress={handleSubmit}
       >
         <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>
-          {loading ? "Đang đăng..." : "Đăng bài"}
+          {loading ? "Đang đăng..." : "Đăng bài ngay"}
         </Text>
       </Pressable>
     </ScrollView>
@@ -696,5 +947,52 @@ const s = StyleSheet.create({
     paddingVertical: 14,
     alignItems: "center",
     marginBottom: 20,
+  },
+  mineActionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: themeColors.card,
+    borderWidth: 1,
+    borderColor: themeColors.border,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: -8,
+    gap: 8,
+  },
+  dotStatus: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  moderationText: {
+    fontSize: 12,
+    color: themeColors.muted,
+    fontWeight: "500",
+  },
+  mineEditBtn: {
+    backgroundColor: "#312e81",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  mineEditBtnText: {
+    color: "#a5b4fc",
+    fontWeight: "600",
+    fontSize: 12,
+  },
+  mineDeleteBtn: {
+    backgroundColor: "#450a0a",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  mineDeleteBtnText: {
+    color: "#fca5a5",
+    fontWeight: "600",
+    fontSize: 12,
   },
 });
