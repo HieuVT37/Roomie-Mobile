@@ -23,6 +23,7 @@ export default function TabsLayout() {
   const unread = useNotifications();
   return (
     <Tabs
+      //@ts-ignore
       initialRouteName="connections"
       screenOptions={{
         tabBarActiveTintColor: themeColors.primary,
