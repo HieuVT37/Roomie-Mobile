@@ -33,11 +33,14 @@ export default function LoginScreen() {
   const bottom = useBottomPad(20);
 
   const submit = async () => {
+    if (loading) return;
     setError("");
     setLoading(true);
     try {
       await login(email.trim().toLowerCase(), password);
-      router.replace("/");
+      // Quay lại màn trước đó nếu có, không thì về trang chủ
+      if (router.canGoBack()) router.back();
+      else router.replace("/");
     } catch (err: any) {
       setError(
         err.code === "ECONNABORTED"

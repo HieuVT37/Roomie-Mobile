@@ -1,5 +1,6 @@
 import { Tabs } from "expo-router";
 import { Text } from "react-native";
+import { AIChatButton } from "../../components/AIChat";
 import { useNotifications } from "../../context/NotificationContext";
 
 // Tông màu chủ đạo Dark Theme (Tím / Xanh đen)
@@ -23,8 +24,10 @@ export default function TabsLayout() {
   const unread = useNotifications();
   return (
     <Tabs
+      //@ts-ignore
       initialRouteName="connections"
       screenOptions={{
+        headerRight: () => <AIChatButton />,
         tabBarActiveTintColor: themeColors.primary,
         tabBarInactiveTintColor: themeColors.muted,
         tabBarStyle: {
