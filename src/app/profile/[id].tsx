@@ -2,13 +2,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-  Alert,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+    Alert,
+    Image,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 import { imageUrl } from "../../api/axios";
 import { sendRequestApi } from "../../api/connections";
@@ -18,12 +18,12 @@ import { useAuth } from "../../auth/AuthContext";
 import { Avatar, Loading, useBottomPad } from "../../components/ui";
 import { useLanguage } from "../../context/LanguageContext";
 import {
-  formatBudgetLocalized,
-  getLocalizedCriteriaLabel,
-  getLocalizedGenderLabel,
-  getLocalizedGuestLabel,
-  getLocalizedPatternLabel,
-  getLocalizedSharedLabel,
+    CRITERIA_LABELS,
+    formatVND,
+    GENDER_LABELS,
+    GUEST_LABELS,
+    PATTERN_LABELS,
+    SHARED_LABELS,
 } from "../../utils/labels";
 
 const themeColors = {
@@ -153,7 +153,7 @@ export default function UserDetailScreen() {
     p.displayName || p.fullName || p.name || t.profile.defaultName;
   const avatarUrl = p.avatarUrl;
   const age = p.age;
-  const gender = p.gender ? getLocalizedGenderLabel(p.gender, language) : null;
+  const gender = p.gender ? GENDER_LABELS[p.gender] || p.gender : null;
   const school = p.school;
   const occupation = p.occupation;
   const subInfo = [
@@ -166,6 +166,11 @@ export default function UserDetailScreen() {
 
   const bio = p.bio;
   const budget = p.budget;
+  const formatBudget = (b: any) => {
+    if (!b || !b.min || !b.max) return t.profile.budgetHidden || "Đã ẩn";
+    return `${formatVND(b.min)} - ${formatVND(b.max)}`;
+  };
+  const budgetDisplay = formatBudget(budget);
   const locations: string[] = Array.isArray(p.locations)
     ? p.locations
     : p.location
@@ -314,7 +319,7 @@ export default function UserDetailScreen() {
             <Text style={s.warningText}>
               ⚠️ {t.profile.failedDealBreakers}{" "}
               {match.failedDealBreakers
-                .map((k: string) => getLocalizedCriteriaLabel(k, language))
+                .map((k: string) => CRITERIA_LABELS[k] || k)
                 .join(", ")}
             </Text>
           </View>
@@ -337,7 +342,7 @@ export default function UserDetailScreen() {
             {Object.entries(match.breakdown).map(([k, val]: any) => (
               <MatchBar
                 key={k}
-                label={getLocalizedCriteriaLabel(k, language)}
+                label={CRITERIA_LABELS[k] || k}
                 value={Number(val)}
               />
             ))}
@@ -356,13 +361,13 @@ export default function UserDetailScreen() {
           />
           <InfoRow
             label={t.profile.budget}
-            value={budget ? formatBudgetLocalized(budget, language) : null}
+            value={budgetDisplay}
           />
 
           {sched ? (
             <InfoRow
               label={t.profile.schedule}
-              value={`${t.profile.sleep} ${sched.sleepTime || "—"} · ${t.profile.wake} ${sched.wakeTime || "—"} (${getLocalizedPatternLabel(sched.pattern, language)})`}
+              value={`${t.profile.sleep} ${sched.sleepTime || "—"} · ${t.profile.wake} ${sched.wakeTime || "—"} (${PATTERN_LABELS[sched.pattern] || sched.pattern})`}
             />
           ) : null}
 
@@ -387,13 +392,13 @@ export default function UserDetailScreen() {
           {l.guestFrequency ? (
             <InfoRow
               label={t.profile.guestFrequency}
-              value={getLocalizedGuestLabel(l.guestFrequency, language)}
+              value={GUEST_LABELS[l.guestFrequency] || l.guestFrequency}
             />
           ) : null}
           {l.sharedSpaceUsage ? (
             <InfoRow
               label={t.profile.sharedSpaceUsage}
-              value={getLocalizedSharedLabel(l.sharedSpaceUsage, language)}
+              value={SHARED_LABELS[l.sharedSpaceUsage] || l.sharedSpaceUsage}
             />
           ) : null}
           {l.smoking != null ? (

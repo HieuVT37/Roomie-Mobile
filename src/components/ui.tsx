@@ -1,17 +1,17 @@
 ﻿import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  FlatList,
-  Image,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
+    ActivityIndicator,
+    FlatList,
+    Image,
+    Keyboard,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    StyleSheet,
+    Text,
+    useWindowDimensions,
+    View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { imageUrl } from "../api/axios";
@@ -171,8 +171,7 @@ export function formatTime(iso?: string) {
 
 /**
  * Gallery: hiển thị danh sách ảnh dạng carousel ngang.
- * Chiều cao tự động tính theo tỉ lệ thực của ảnh đầu tiên
- * để không bao giờ cắt xén ảnh.
+ * Hiển thị ảnh tỉ lệ 3:4 với blur effect giống như ở danh sách.
  */
 export function Gallery({
   images,
@@ -185,27 +184,14 @@ export function Gallery({
 }) {
   const { width } = useWindowDimensions();
   const [index, setIndex] = useState(0);
-  const [imgHeight, setImgHeight] = useState(height);
-
-  // Tính chiều cao theo tỉ lệ thực của ảnh đầu tiên
-  useEffect(() => {
-    if (!images?.length) return;
-    const uri = imageUrl(images[0]) as string;
-    if (!uri) return;
-    Image.getSize(
-      uri,
-      (w, h) => {
-        if (w > 0) setImgHeight(Math.round((h / w) * width));
-      },
-      () => setImgHeight(height),
-    );
-  }, [images, width, height]);
+  // Tỉ lệ 3:4 (chiều cao = 3, chiều rộng = 4)
+  const imgHeight = Math.round((width * 3) / 4);
 
   if (!images?.length) {
     return (
       <View
         style={{
-          height,
+          height: imgHeight,
           alignItems: "center",
           justifyContent: "center",
           backgroundColor: colors.card,
@@ -228,11 +214,29 @@ export function Gallery({
           setIndex(Math.round(e.nativeEvent.contentOffset.x / width))
         }
         renderItem={({ item }) => (
-          <Image
-            source={{ uri: imageUrl(item) as string }}
-            style={{ width, height: imgHeight, backgroundColor: colors.card }}
-            resizeMode="contain"
-          />
+          <View style={{ width, height: imgHeight, backgroundColor: colors.card }}>
+            {/* Nền mờ */}
+            <Image
+              source={{ uri: imageUrl(item) as string }}
+              style={{ 
+                position: "absolute", 
+                width: "100%", 
+                height: "100%" 
+              }}
+              resizeMode="cover"
+              blurRadius={20}
+            />
+            {/* Ảnh chính ở giữa */}
+            <Image
+              source={{ uri: imageUrl(item) as string }}
+              style={{ 
+                position: "absolute", 
+                width: "100%", 
+                height: "100%" 
+              }}
+              resizeMode="contain"
+            />
+          </View>
         )}
       />
       {images.length > 1 && (

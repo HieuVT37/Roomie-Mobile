@@ -1,37 +1,39 @@
+import DateTimePicker from "@react-native-community/datetimepicker";
 import * as ImagePicker from "expo-image-picker";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Alert,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View,
-  Image,
+    Alert,
+    Image,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 import { addFavoriteApi, removeFavoriteApi } from "../../api/favorites";
 import {
-  deletePassApi,
-  getPassApi,
-  setPassStatusApi,
-  updatePassApi,
+    deletePassApi,
+    getPassApi,
+    setPassStatusApi,
+    updatePassApi,
 } from "../../api/pass";
 import { uploadImagesApi } from "../../api/uploads";
 import { useAuth } from "../../auth/AuthContext";
 import { MessageOwnerButton } from "../../components/MessageOwnerButton";
 import { Gallery, Loading, useBottomPad } from "../../components/ui";
 import {
-  CONDITION_LABELS,
-  DEAL_LABELS,
-  ITEM_CATEGORY_LABELS,
-  PASS_STATUS_LABELS,
-  PASS_TYPE_LABELS,
-  formatVND,
-  passPriceText,
+    CONDITION_LABELS,
+    DEAL_LABELS,
+    ITEM_CATEGORY_LABELS,
+    PASS_STATUS_LABELS,
+    PASS_TYPE_LABELS,
+    formatVND,
+    passPriceText,
 } from "../../utils/labels";
 
 const themeColors = {
@@ -427,6 +429,8 @@ function EditPassModal({
   const isRoom = initialListing.type === "room";
   const room = initialListing.roomInfo || {};
   const item = initialListing.itemInfo || {};
+  const scrollRef = useRef<ScrollView | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const [title, setTitle] = useState(initialListing.title || "");
   const [description, setDescription] = useState(initialListing.description || "");
@@ -460,6 +464,92 @@ function EditPassModal({
   const [newImageAssets, setNewImageAssets] = useState<ImagePicker.ImagePickerAsset[]>([]);
   const [saving, setSaving] = useState(false);
 
+  // Validation errors
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Validate form
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (isRoom) {
+      // Validate Pass Phòng
+      if (!title.trim()) {
+        newErrors.title = "Vui lòng nhập tiêu đề";
+      } else if (title.trim().length < 10) {
+        newErrors.title = "Tiêu đề phải có ít nhất 10 ký tự";
+      } else if (title.trim().length > 100) {
+        newErrors.title = "Tiêu đề không được quá 100 ký tự";
+      }
+
+      if (!address.trim()) {
+        newErrors.address = "Vui lòng nhập địa chỉ phòng";
+      }
+
+      if (price && isNaN(Number(price))) {
+        newErrors.price = "Giá phải là số";
+      } else if (price && Number(price) < 0) {
+        newErrors.price = "Giá không được âm";
+      } else if (price && Number(price) > 100000000) {
+        newErrors.price = "Giá không hợp lệ (quá 100 triệu)";
+      }
+
+      if (deposit && isNaN(Number(deposit))) {
+        newErrors.deposit = "Tiền cọc phải là số";
+      } else if (deposit && Number(deposit) < 0) {
+        newErrors.deposit = "Tiền cọc không được âm";
+      }
+
+      const leaseMonths = remainingLeaseMonths.trim();
+      if (!leaseMonths) {
+        newErrors.remainingLeaseMonths = "Vui lòng nhập số tháng hợp đồng còn lại";
+      } else if (isNaN(Number(leaseMonths))) {
+        newErrors.remainingLeaseMonths = "Số tháng phải là số";
+      } else if (Number(leaseMonths) < 0 || Number(leaseMonths) > 120) {
+        newErrors.remainingLeaseMonths = "Số tháng phải từ 0 đến 120";
+      }
+
+    } else {
+      // Validate Pass Đồ
+      if (!title.trim()) {
+        newErrors.title = "Vui lòng nhập tên món đồ";
+      } else if (title.trim().length < 5) {
+        newErrors.title = "Tên món đồ phải có ít nhất 5 ký tự";
+      } else if (title.trim().length > 100) {
+        newErrors.title = "Tên món đồ không được quá 100 ký tự";
+      }
+
+      if (dealType !== "give_away") {
+        if (price && isNaN(Number(price))) {
+          newErrors.price = "Giá phải là số";
+        } else if (price && Number(price) < 0) {
+          newErrors.price = "Giá không được âm";
+        } else if (price && Number(price) > 100000000) {
+          newErrors.price = "Giá không hợp lệ (quá 100 triệu)";
+        }
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // Scroll to first error
+  const scrollToError = () => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({ y: 0, animated: true });
+    }
+  };
+
+  // Helper render error
+  const ErrorText = ({ field }: { field: string }) => {
+    if (!errors[field]) return null;
+    return (
+      <Text style={{ color: themeColors.danger, fontSize: 12, marginTop: -4 }}>
+        {errors[field]}
+      </Text>
+    );
+  };
+
   const pickMoreImages = async () => {
     const totalCount = images.length + newImageAssets.length;
     if (totalCount >= 8) {
@@ -478,8 +568,9 @@ function EditPassModal({
   };
 
   const handleSave = async () => {
-    if (!title.trim() || title.trim().length < 3) {
-      Alert.alert("Lỗi", "Vui lòng nhập tiêu đề từ 3 ký tự trở lên.");
+    // Validate form
+    if (!validateForm()) {
+      scrollToError();
       return;
     }
 
@@ -517,32 +608,12 @@ function EditPassModal({
       // 2. Chuẩn bị payload đúng chuẩn backend
       let payload: any;
       if (isRoom) {
-        if (!address.trim()) {
-          Alert.alert("Lỗi", "Vui lòng nhập địa chỉ phòng.");
-          setSaving(false);
-          return;
-        }
-        const leaseMonths = remainingLeaseMonths.trim() !== "" ? Number(remainingLeaseMonths) : 0;
-        if (isNaN(leaseMonths) || leaseMonths < 0 || leaseMonths > 120) {
-          Alert.alert("Lỗi", "Số tháng hợp đồng còn lại phải từ 0 đến 120.");
-          setSaving(false);
-          return;
-        }
+        const leaseMonths = Number(remainingLeaseMonths);
 
+        // Format availableFrom chuẩn YYYY-MM-DD (đã được format từ DatePicker)
         let availDate: string | null = null;
         if (availableFrom.trim()) {
-          const raw = availableFrom.trim();
-          if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(raw)) {
-            const [d, m, y] = raw.split("/");
-            availDate = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
-          } else if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-            availDate = raw;
-          } else {
-            const parsed = new Date(raw);
-            if (!isNaN(parsed.getTime())) {
-              availDate = parsed.toISOString().slice(0, 10);
-            }
-          }
+          availDate = availableFrom.trim();
         }
 
         payload = {
@@ -580,8 +651,11 @@ function EditPassModal({
       }
 
       await updatePassApi(initialListing.id || initialListing._id, payload);
-      Alert.alert("Thành công", "Đã cập nhật bài đăng!");
-      onSuccess();
+      Alert.alert(
+        "✅ Đã lưu thay đổi",
+        "Bài viết đã được cập nhật và đang chờ quản trị viên duyệt lại. Sau khi được duyệt, thay đổi sẽ hiển thị công khai.",
+        [{ text: "Đồng ý", onPress: onSuccess }]
+      );
     } catch (err: any) {
       const errMsg =
         err.response?.data?.errors?.[0]?.message ||
@@ -609,18 +683,29 @@ function EditPassModal({
           </Pressable>
         </View>
 
-        <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 60 }}>
+        <ScrollView ref={scrollRef} contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 60 }}>
+          {/* Thông báo về kiểm duyệt */}
+          <View style={{ backgroundColor: "#1e3a8a", padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "#3b82f6" }}>
+            <Text style={{ color: "#93c5fd", fontSize: 13, lineHeight: 20 }}>
+              ℹ️ <Text style={{ fontWeight: "700" }}>Lưu ý:</Text> Mọi chỉnh sửa cần được quản trị viên duyệt lại trước khi hiển thị công khai.
+            </Text>
+          </View>
+
           {/* Thông tin chính */}
           <View style={sModal.card}>
             <Text style={sModal.cardTitle}>Thông tin chính</Text>
             <Text style={sModal.label}>Tiêu đề *</Text>
             <TextInput
-              style={sModal.input}
+              style={[sModal.input, errors.title && { borderColor: themeColors.danger, borderWidth: 1 }]}
               value={title}
-              onChangeText={setTitle}
+              onChangeText={(val) => {
+                if (errors.title) setErrors((prev) => ({ ...prev, title: "" }));
+                setTitle(val);
+              }}
               placeholder="Tiêu đề bài đăng..."
               placeholderTextColor="#64748b"
             />
+            <ErrorText field="title" />
 
             <Text style={sModal.label}>Mô tả</Text>
             <TextInput
@@ -636,14 +721,18 @@ function EditPassModal({
               {isRoom ? "Giá thuê (VNĐ/tháng)" : dealType === "give_away" ? "Giá (0đ - Cho tặng)" : "Giá (VNĐ)"}
             </Text>
             <TextInput
-              style={[sModal.input, !isRoom && dealType === "give_away" && { opacity: 0.6 }]}
+              style={[sModal.input, !isRoom && dealType === "give_away" && { opacity: 0.6 }, errors.price && { borderColor: themeColors.danger, borderWidth: 1 }]}
               value={!isRoom && dealType === "give_away" ? "0" : price}
-              onChangeText={setPrice}
+              onChangeText={(val) => {
+                if (errors.price) setErrors((prev) => ({ ...prev, price: "" }));
+                setPrice(val);
+              }}
               placeholder="Giá (VNĐ)"
               placeholderTextColor="#64748b"
               keyboardType="numeric"
               editable={isRoom || dealType !== "give_away"}
             />
+            <ErrorText field="price" />
 
             <Text style={sModal.label}>Khu vực</Text>
             <TextInput
@@ -670,41 +759,70 @@ function EditPassModal({
               <Text style={sModal.cardTitle}>Thông tin phòng</Text>
               <Text style={sModal.label}>Địa chỉ phòng *</Text>
               <TextInput
-                style={sModal.input}
+                style={[sModal.input, errors.address && { borderColor: themeColors.danger, borderWidth: 1 }]}
                 value={address}
-                onChangeText={setAddress}
+                onChangeText={(val) => {
+                  if (errors.address) setErrors((prev) => ({ ...prev, address: "" }));
+                  setAddress(val);
+                }}
                 placeholder="Địa chỉ chi tiết..."
                 placeholderTextColor="#64748b"
               />
+              <ErrorText field="address" />
 
               <Text style={sModal.label}>Tiền cọc (VNĐ)</Text>
               <TextInput
-                style={sModal.input}
+                style={[sModal.input, errors.deposit && { borderColor: themeColors.danger, borderWidth: 1 }]}
                 value={deposit}
-                onChangeText={setDeposit}
+                onChangeText={(val) => {
+                  if (errors.deposit) setErrors((prev) => ({ ...prev, deposit: "" }));
+                  setDeposit(val);
+                }}
                 keyboardType="numeric"
                 placeholder="Tiền cọc..."
                 placeholderTextColor="#64748b"
               />
+              <ErrorText field="deposit" />
 
               <Text style={sModal.label}>Số tháng hợp đồng còn lại (0 - 120) *</Text>
               <TextInput
-                style={sModal.input}
+                style={[sModal.input, errors.remainingLeaseMonths && { borderColor: themeColors.danger, borderWidth: 1 }]}
                 value={remainingLeaseMonths}
-                onChangeText={setRemainingLeaseMonths}
+                onChangeText={(val) => {
+                  if (errors.remainingLeaseMonths) setErrors((prev) => ({ ...prev, remainingLeaseMonths: "" }));
+                  setRemainingLeaseMonths(val);
+                }}
                 keyboardType="numeric"
                 placeholder="VD: 5"
                 placeholderTextColor="#64748b"
               />
+              <ErrorText field="remainingLeaseMonths" />
 
-              <Text style={sModal.label}>Bàn giao từ ngày (YYYY-MM-DD)</Text>
-              <TextInput
+              <Text style={sModal.label}>Bàn giao từ ngày</Text>
+              <Pressable
                 style={sModal.input}
-                value={availableFrom}
-                onChangeText={setAvailableFrom}
-                placeholder="2026-11-01"
-                placeholderTextColor="#64748b"
-              />
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Text style={{ color: availableFrom ? themeColors.text : "#64748b" }}>
+                  {availableFrom 
+                    ? new Date(availableFrom).toLocaleDateString("vi-VN")
+                    : "Chọn ngày bàn giao"}
+                </Text>
+              </Pressable>
+              {showDatePicker && (
+                <DateTimePicker
+                  value={availableFrom ? new Date(availableFrom) : new Date()}
+                  mode="date"
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  onChange={(event, selectedDate) => {
+                    setShowDatePicker(Platform.OS === "ios");
+                    if (selectedDate) {
+                      const formatted = selectedDate.toISOString().split("T")[0];
+                      setAvailableFrom(formatted);
+                    }
+                  }}
+                />
+              )}
 
               <View style={sModal.switchRow}>
                 <Text style={{ color: themeColors.text, fontWeight: "600", flex: 1 }}>
