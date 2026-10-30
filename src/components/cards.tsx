@@ -2,54 +2,25 @@ import { useRouter } from "expo-router";
 import { Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { imageUrl } from "../api/axios";
 import {
-<<<<<<< Updated upstream
-=======
     LISTING_STATUS_LABELS,
     MODERATION_LABELS,
->>>>>>> Stashed changes
     PASS_TYPE_LABELS,
     ROOM_TYPE_LABELS,
     formatVND,
     passPriceText,
 } from "../utils/labels";
-<<<<<<< Updated upstream
-import { colors, shared } from "./ui";
-
-/**
- * Hook tính chiều cao ảnh theo tỉ lệ thực tế của ảnh đầu tiên.
- * Nếu không lấy được, trả về giá trị mặc định.
- */
-function useImageAspectHeight(uri: string | undefined, containerWidth: number, fallback = 220) {
-  const [height, setHeight] = useState(fallback);
-  useEffect(() => {
-    if (!uri) return;
-    Image.getSize(
-      uri,
-      (w, h) => {
-        if (w > 0) setHeight(Math.round((h / w) * containerWidth));
-      },
-      () => setHeight(fallback),
-    );
-  }, [uri, containerWidth, fallback]);
-  return height;
-}
-=======
 import { ListingImage } from "./listing-image";
 import { colors, shared } from "./ui";
->>>>>>> Stashed changes
 
 // 1. CARD PHÒNG TRỌ (Accommodation)
-export function AccommodationCard({ item }: { item: any }) {
+export function AccommodationCard({ item, showStatus = false }: { item: any; showStatus?: boolean }) {
   const router = useRouter();
-  const { width: screenWidth } = useWindowDimensions();
-  const cardWidth = screenWidth - 24; // trừ padding ngang 12*2
-  const firstImage = item.images?.[0] ? (imageUrl(item.images[0]) as string) : undefined;
-  const imgHeight = useImageAspectHeight(firstImage, cardWidth);
-
+  const firstImage = Array.isArray(item.images) ? item.images[0] : undefined;
   const id = item.id || item._id;
+  const canOpen = (typeof id === "string" && !!id.trim()) || (typeof id === "number" && Number.isFinite(id));
   const sub = [
-    item.address?.district,
-    item.area && `${item.area} m²`,
+    typeof item.address === "string" ? item.address : item.address?.district,
+    item.area != null && `${item.area} m²`,
     (ROOM_TYPE_LABELS as any)[item.roomType],
   ]
     .filter(Boolean)
@@ -58,6 +29,9 @@ export function AccommodationCard({ item }: { item: any }) {
   return (
     <Pressable
       style={[shared.card, s.cardWrapper]}
+      disabled={!canOpen}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !canOpen }}
       onPress={() =>
         router.push({
           pathname: "/accommodation/[id]",
@@ -65,17 +39,7 @@ export function AccommodationCard({ item }: { item: any }) {
         })
       }
     >
-      {firstImage ? (
-        <Image
-          source={{ uri: firstImage }}
-          style={{ width: "100%", height: imgHeight, backgroundColor: "#334155" }}
-          resizeMode="contain"
-        />
-      ) : (
-        <View style={[{ width: "100%", height: 180, backgroundColor: "#334155" }, s.coverEmpty]}>
-          <Text style={{ fontSize: 40 }}>🏠</Text>
-        </View>
-      )}
+      <ListingImage uri={firstImage} />
       <View style={{ padding: 12, gap: 3 }}>
         <Text style={s.price}>
           {formatVND(item.price)}
@@ -85,6 +49,19 @@ export function AccommodationCard({ item }: { item: any }) {
           {item.title}
         </Text>
         {sub ? <Text style={s.muted}>{sub}</Text> : null}
+        {showStatus && (
+          <View style={{ gap: 4, marginTop: 6 }}>
+            {typeof item.status === "string" && item.status ? (
+              <Text style={s.muted}>Trạng thái: {(LISTING_STATUS_LABELS as Record<string, string>)[item.status] || item.status}</Text>
+            ) : null}
+            {typeof item.moderationStatus === "string" && item.moderationStatus ? (
+              <Text style={s.muted}>Kiểm duyệt: {(MODERATION_LABELS as Record<string, string>)[item.moderationStatus] || item.moderationStatus}</Text>
+            ) : null}
+            {typeof item.rejectionReason === "string" && item.rejectionReason.trim() ? (
+              <Text style={s.rejection}>Lý do từ chối: {item.rejectionReason}</Text>
+            ) : null}
+          </View>
+        )}
       </View>
     </Pressable>
   );
@@ -100,12 +77,6 @@ export function PassCard({ item }: { item: any }) {
   const imgHeight = Math.round((cardWidth * 3) / 4);
   
   const firstImage = item.images?.[0] ? (imageUrl(item.images[0]) as string) : undefined;
-<<<<<<< Updated upstream
-  // Tỉ lệ 3:4 (chiều cao = 3, chiều rộng = 4)
-  const imgHeight = Math.round((cardWidth * 3) / 4);
-
-=======
->>>>>>> Stashed changes
   const id = item.id || item._id;
 
   return (
@@ -116,28 +87,6 @@ export function PassCard({ item }: { item: any }) {
       }
     >
       {firstImage ? (
-<<<<<<< Updated upstream
-        <View style={{ width: "100%", height: imgHeight, backgroundColor: "#334155", overflow: "hidden" }}>
-          {/* Nền mờ */}
-          <Image
-            source={{ uri: firstImage }}
-            style={{ 
-              position: "absolute", 
-              width: "100%", 
-              height: "100%" 
-            }}
-            resizeMode="cover"
-            blurRadius={20}
-          />
-          {/* Ảnh chính ở giữa */}
-          <Image
-            source={{ uri: firstImage }}
-            style={{ 
-              position: "absolute", 
-              width: "100%", 
-              height: "100%" 
-            }}
-=======
         <View style={{ width: "100%", height: imgHeight, overflow: "hidden" }}>
           {/* Background blurred image */}
           <Image
@@ -150,18 +99,12 @@ export function PassCard({ item }: { item: any }) {
           <Image
             source={{ uri: firstImage }}
             style={{ width: "100%", height: imgHeight }}
->>>>>>> Stashed changes
             resizeMode="contain"
           />
         </View>
       ) : (
-<<<<<<< Updated upstream
-        <View style={[{ width: "100%", height: imgHeight, backgroundColor: "#334155" }, s.coverEmpty]}>
-          <Text style={{ fontSize: 40 }}>{item.type === 'room' ? '🏠' : '📦'}</Text>
-=======
         <View style={[{ width: "100%", height: imgHeight, backgroundColor: "#1e293b" }, s.coverEmpty]}>
           <Text style={{ fontSize: 40 }}>📦</Text>
->>>>>>> Stashed changes
         </View>
       )}
       <View style={{ padding: 12, gap: 6 }}>
@@ -170,7 +113,7 @@ export function PassCard({ item }: { item: any }) {
           {item.title}
         </Text>
         <Text style={s.price}>{passPriceText(item)}</Text>
-        {(item.area || item.roomInfo?.address) ? <Text style={s.muted}>📍 {item.area || item.roomInfo?.address}</Text> : null}
+        {item.area ? <Text style={s.muted}>📍 {item.area}</Text> : null}
       </View>
     </Pressable>
   );
