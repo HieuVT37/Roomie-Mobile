@@ -11,7 +11,6 @@ import {
 } from "../utils/labels";
 import { ListingImage } from "./listing-image";
 import { colors, shared } from "./ui";
-import { ListingImage } from "./listing-image";
 
 // 1. CARD PHÒNG TRỌ (Accommodation)
 export function AccommodationCard({ item, showStatus = false }: { item: any; showStatus?: boolean }) {
