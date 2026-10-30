@@ -3,7 +3,7 @@ import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import { useRouter } from "expo-router";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { Alert, AppState, Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import { listConversationsApi } from "../api/conversations";
 import { notificationsApi, registerPushTokenApi } from "../api/notifications";
 import { useAuth } from "../auth/AuthContext";
@@ -82,7 +82,6 @@ export function NotificationProvider({ children }) {
 
         if (active && token) {
           setExpoPushToken(token);
-          Alert.alert("Push token", token);
           console.log("EXPO_PUSH_TOKEN", token);
           await registerPushTokenApi(token, Platform.OS).catch(() => {});
         }

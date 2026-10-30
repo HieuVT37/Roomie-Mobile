@@ -8,7 +8,7 @@ import { PLAN_LABELS } from "../../utils/labels";
 export default function AccountScreen() {
   const router = useRouter();
   const { user, profile, loading, logout } = useAuth();
-  const { toggleLanguage, t } = useLanguage();
+  const { t } = useLanguage();
 
   if (loading) return <Loading text={t.common.checkingAuth} />;
   if (!user) return <LoginPrompt text={t.account.loginPrompt} />;
@@ -53,12 +53,6 @@ export default function AccountScreen() {
 
       {/* Danh sách các nút chức năng */}
       <View style={{ gap: 12 }}>
-        {/* Nút chuyển đổi ngôn ngữ Việt – Anh */}
-        <Pressable style={styles.menuItem} onPress={toggleLanguage}>
-          <Text style={styles.menuText}>{t.account.languageLabel}</Text>
-          <Text style={styles.langBadge}>{t.account.languageValue}</Text>
-        </Pressable>
-
         {/* Chỉnh sửa hồ sơ */}
         <Pressable
           style={styles.menuItem}
@@ -164,15 +158,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#f8fafc",
     fontWeight: "500",
-  },
-  langBadge: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#818cf8",
-    backgroundColor: "#312e81",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
   },
   arrow: {
     color: "#64748b",

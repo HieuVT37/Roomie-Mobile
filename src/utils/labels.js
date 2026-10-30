@@ -116,3 +116,27 @@ export const normalizeVietnamese = (str = "") =>
     .replace(/Đ/g, "D")
     .toLowerCase()
     .trim();
+
+// ---------- Nhãn theo ngôn ngữ (dùng ở màn hình hồ sơ người khác: profile/[id].tsx) ----------
+const EN_CRITERIA = {
+  budget: "Budget", location: "Area", schedule: "Schedule", cleanliness: "Cleanliness",
+  lifestyle: "Lifestyle", privacy: "Privacy", sharedSpace: "Shared space", interests: "Interests",
+};
+const EN_GENDER = { male: "Male", female: "Female", other: "Other", private: "Prefer not to say" };
+const EN_GUEST = { never: "Never", rarely: "Rarely", sometimes: "Sometimes", often: "Often" };
+const EN_SHARED = { minimal: "Minimal", moderate: "Moderate", open: "Open" };
+const EN_PATTERN = { student: "Student", office: "Office hours", freelance: "Freelance", shift: "Shift work" };
+
+const localized = (vi, en, key, language) => {
+  if (key === null || key === undefined || key === "") return "—";
+  return (language === "en" ? en[key] : vi[key]) ?? vi[key] ?? String(key);
+};
+
+export const getLocalizedCriteriaLabel = (key, language) => localized(CRITERIA_LABELS, EN_CRITERIA, key, language);
+export const getLocalizedGenderLabel = (key, language) => localized(GENDER_LABELS, EN_GENDER, key, language);
+export const getLocalizedGuestLabel = (key, language) => localized(GUEST_LABELS, EN_GUEST, key, language);
+export const getLocalizedSharedLabel = (key, language) => localized(SHARED_LABELS, EN_SHARED, key, language);
+export const getLocalizedPatternLabel = (key, language) => localized(PATTERN_LABELS, EN_PATTERN, key, language);
+
+export const formatBudgetLocalized = (b, language) =>
+  b ? `${formatVND(b.min)} - ${formatVND(b.max)}` : language === "en" ? "Hidden" : "Đã ẩn";
