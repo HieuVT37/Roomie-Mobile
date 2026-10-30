@@ -11,6 +11,7 @@ import {
 } from "../utils/labels";
 import { ListingImage } from "./listing-image";
 import { colors, shared } from "./ui";
+import { ListingImage } from "./listing-image";
 
 // 1. CARD PHÒNG TRỌ (Accommodation)
 export function AccommodationCard({ item, showStatus = false }: { item: any; showStatus?: boolean }) {
@@ -67,7 +68,7 @@ export function AccommodationCard({ item, showStatus = false }: { item: any; sho
   );
 }
 
-// 2. CARD PASS ĐỒ & PASS PHÒNG (PassCard)
+// 2. CARD PASS ĐỒ (PassCard)
 export function PassCard({ item }: { item: any }) {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
@@ -185,6 +186,7 @@ const s = StyleSheet.create({
     borderColor: "#334155",
     overflow: "hidden",
   },
+  rejection: { color: "#fca5a5", fontSize: 13 },
   coverEmpty: { alignItems: "center", justifyContent: "center" },
   badge: {
     alignSelf: "flex-start",

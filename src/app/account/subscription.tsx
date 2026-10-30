@@ -1,5 +1,5 @@
 import { Stack } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -19,18 +19,10 @@ const PLAN_LEVELS: Record<string, number> = {
   pro: 2,
 };
 
-export default function SubscriptionScreen() {
-  const { user } = useAuth();
-  const [plans, setPlans] = useState<any[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [submittingPlan, setSubmittingPlan] = useState<string | null>(null);
+const userKey = (user: any) => String(user?.id ?? user?._id ?? user?.email ?? "");
 
-  // Cấp độ gói hiện tại của người dùng (mặc định là basic = 0)
-  const currentPlanKey = (user?.currentPlan || "basic").toLowerCase();
-  const currentLevel = PLAN_LEVELS[currentPlanKey] ?? 0;
-
-  // Dữ liệu gói mặc định
-  const DEFAULT_PLANS = [
+// Dữ liệu gói mặc định, không thay đổi theo render hay phiên đăng nhập.
+const DEFAULT_PLANS = [
     {
       key: "basic",
       name: "Basic",
@@ -70,7 +62,26 @@ export default function SubscriptionScreen() {
         { label: "Đăng tin cho thuê phòng", value: "Tối đa 20 tin" },
       ],
     },
-  ];
+];
+
+export default function SubscriptionScreen() {
+  const { user, refreshSession } = useAuth();
+  const [plans, setPlans] = useState<any[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [submittingPlan, setSubmittingPlan] = useState<string | null>(null);
+  const submitting = useRef(false);
+  const mounted = useRef(false);
+  const activeUser = useRef(user);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  useEffect(() => { activeUser.current = user; }, [user]);
+
+  // Cấp độ gói hiện tại của người dùng (mặc định là basic = 0)
+  const currentPlanKey = typeof user?.currentPlan === "string" ? user.currentPlan.trim().toLowerCase() : "basic";
+  const currentLevel = PLAN_LEVELS[currentPlanKey] ?? 0;
 
   useEffect(() => {
     // Gọi API lấy thông tin gói từ Backend
@@ -89,6 +100,11 @@ export default function SubscriptionScreen() {
 
   // Xử lý khi nhấn nút Đăng ký / Gia hạn / Nâng cấp
   const handleSelectPlan = (planKey: string) => {
+    if (submitting.current) return;
+    if (!user) {
+      Alert.alert("Cần đăng nhập", "Vui lòng đăng nhập để gửi yêu cầu gói dịch vụ.");
+      return;
+    }
     const targetLevel = PLAN_LEVELS[planKey] ?? 0;
 
     // Trường hợp 1: Chọn gói thấp hơn gói đang dùng
@@ -106,6 +122,8 @@ export default function SubscriptionScreen() {
     // Trường hợp 3: Gia hạn hoặc Nâng cấp
     const isRenew = planKey === currentPlanKey;
     const actionText = isRenew ? "gia hạn thêm 30 ngày cho" : "nâng cấp lên";
+    const expectedUser = userKey(user);
+    const sameUser = () => Boolean(expectedUser) && userKey(activeUser.current) === expectedUser;
 
     Alert.alert(
       "Xác nhận",
@@ -115,20 +133,46 @@ export default function SubscriptionScreen() {
         {
           text: "Thanh toán",
           onPress: async () => {
+            if (submitting.current || !mounted.current || !sameUser()) return;
+            submitting.current = true;
+            setSubmittingPlan(planKey);
             try {
-              setSubmittingPlan(planKey);
               await api.post("/subscriptions/subscribe", { plan: planKey });
-              Alert.alert(
-                "Thành công",
-                `Đã ${isRenew ? "gia hạn" : "nâng cấp"} gói dịch vụ thành công!`,
-              );
+              if (!mounted.current || !sameUser()) return;
+              try {
+                const session = await refreshSession({ force: true });
+                if (!mounted.current || (!sameUser() && activeUser.current)) return;
+                if (!session?.user) {
+                  Alert.alert(
+                    "Yêu cầu đã được tiếp nhận",
+                    "Máy chủ đã tiếp nhận yêu cầu gói dịch vụ. Phiên đăng nhập đã thay đổi; vui lòng đăng nhập lại để kiểm tra kết quả.",
+                  );
+                  return;
+                }
+                if (userKey(session.user) !== expectedUser) return;
+                Alert.alert(
+                  "Yêu cầu đã được tiếp nhận",
+                  "Máy chủ đã tiếp nhận yêu cầu gói dịch vụ. Thông tin tài khoản đã được làm mới từ máy chủ.",
+                );
+              } catch {
+                if (!mounted.current || (!sameUser() && activeUser.current)) return;
+                Alert.alert(
+                  "Yêu cầu đã được tiếp nhận",
+                  "Máy chủ đã tiếp nhận yêu cầu, nhưng chưa thể làm mới thông tin tài khoản. Vui lòng kiểm tra lại trước khi gửi yêu cầu khác.",
+                );
+              }
             } catch (error: any) {
-              Alert.alert(
-                "Thông báo",
-                `Đã gửi yêu cầu ${isRenew ? "gia hạn" : "nâng cấp"} gói!`,
-              );
+              if (mounted.current && sameUser()) {
+                Alert.alert(
+                  "Không gửi được yêu cầu",
+                  typeof error?.response?.data?.message === "string"
+                    ? error.response.data.message
+                    : "Chưa thể gửi yêu cầu gói dịch vụ. Vui lòng thử lại.",
+                );
+              }
             } finally {
-              setSubmittingPlan(null);
+              submitting.current = false;
+              if (mounted.current) setSubmittingPlan(null);
             }
           },
         },
@@ -206,16 +250,17 @@ export default function SubscriptionScreen() {
               <TouchableOpacity
                 style={[
                   styles.actionBtn,
-                  (isLowerPlan || (isCurrent && plan.key === "basic")) &&
+                  (!user || submittingPlan !== null || isLowerPlan || (isCurrent && plan.key === "basic")) &&
                     styles.disabledBtn,
                   !isLowerPlan &&
                     (plan.highlight || plan.key === "pro" || isCurrent) &&
                     styles.activeBtn,
                 ]}
                 disabled={
+                  !user ||
+                  submittingPlan !== null ||
                   isLowerPlan ||
-                  (isCurrent && plan.key === "basic") ||
-                  submittingPlan === plan.key
+                  (isCurrent && plan.key === "basic")
                 }
                 onPress={() => handleSelectPlan(plan.key)}
               >
@@ -239,7 +284,7 @@ export default function SubscriptionScreen() {
 
       <Text style={styles.footerNote}>
         Đăng tin cho thuê phòng còn yêu cầu tài khoản được cấp quyền chủ trọ.
-        Nâng cấp gói có hiệu lực ngay và gói cũ bị thay thế.
+        Gói và quyền có hiệu lực theo kết quả được máy chủ xác nhận.
       </Text>
     </ScrollView>
   );
