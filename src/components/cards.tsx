@@ -1,13 +1,18 @@
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { imageUrl } from "../api/axios";
 import {
+<<<<<<< Updated upstream
+=======
+    LISTING_STATUS_LABELS,
+    MODERATION_LABELS,
+>>>>>>> Stashed changes
     PASS_TYPE_LABELS,
     ROOM_TYPE_LABELS,
     formatVND,
     passPriceText,
 } from "../utils/labels";
+<<<<<<< Updated upstream
 import { colors, shared } from "./ui";
 
 /**
@@ -28,6 +33,10 @@ function useImageAspectHeight(uri: string | undefined, containerWidth: number, f
   }, [uri, containerWidth, fallback]);
   return height;
 }
+=======
+import { ListingImage } from "./listing-image";
+import { colors, shared } from "./ui";
+>>>>>>> Stashed changes
 
 // 1. CARD PHÒNG TRỌ (Accommodation)
 export function AccommodationCard({ item }: { item: any }) {
@@ -86,10 +95,17 @@ export function PassCard({ item }: { item: any }) {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
   const cardWidth = screenWidth - 24;
+  
+  // Tỉ lệ 3:4 - chiều cao = 3, chiều rộng = 4
+  const imgHeight = Math.round((cardWidth * 3) / 4);
+  
   const firstImage = item.images?.[0] ? (imageUrl(item.images[0]) as string) : undefined;
+<<<<<<< Updated upstream
   // Tỉ lệ 3:4 (chiều cao = 3, chiều rộng = 4)
   const imgHeight = Math.round((cardWidth * 3) / 4);
 
+=======
+>>>>>>> Stashed changes
   const id = item.id || item._id;
 
   return (
@@ -100,6 +116,7 @@ export function PassCard({ item }: { item: any }) {
       }
     >
       {firstImage ? (
+<<<<<<< Updated upstream
         <View style={{ width: "100%", height: imgHeight, backgroundColor: "#334155", overflow: "hidden" }}>
           {/* Nền mờ */}
           <Image
@@ -120,12 +137,31 @@ export function PassCard({ item }: { item: any }) {
               width: "100%", 
               height: "100%" 
             }}
+=======
+        <View style={{ width: "100%", height: imgHeight, overflow: "hidden" }}>
+          {/* Background blurred image */}
+          <Image
+            source={{ uri: firstImage }}
+            style={{ position: "absolute", width: "100%", height: "100%" }}
+            resizeMode="cover"
+            blurRadius={20}
+          />
+          {/* Foreground sharp image */}
+          <Image
+            source={{ uri: firstImage }}
+            style={{ width: "100%", height: imgHeight }}
+>>>>>>> Stashed changes
             resizeMode="contain"
           />
         </View>
       ) : (
+<<<<<<< Updated upstream
         <View style={[{ width: "100%", height: imgHeight, backgroundColor: "#334155" }, s.coverEmpty]}>
           <Text style={{ fontSize: 40 }}>{item.type === 'room' ? '🏠' : '📦'}</Text>
+=======
+        <View style={[{ width: "100%", height: imgHeight, backgroundColor: "#1e293b" }, s.coverEmpty]}>
+          <Text style={{ fontSize: 40 }}>📦</Text>
+>>>>>>> Stashed changes
         </View>
       )}
       <View style={{ padding: 12, gap: 6 }}>
