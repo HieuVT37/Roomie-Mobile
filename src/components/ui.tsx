@@ -1,4 +1,4 @@
-﻿import { useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -10,11 +10,12 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
+  type ViewInstance,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { imageUrl } from "../api/axios";
+import { ListingImage } from "./listing-image";
 
 // Tông màu chủ đạo Dark Theme (Tím / Xanh đen) đồng bộ toàn app
 export const colors = {
@@ -52,7 +53,7 @@ export function useKeyboardVisible() {
 
 const ANDROID_BEHAVIOR: "padding" | "height" | undefined = "padding";
 export function KeyboardScreen({ children }: { children: React.ReactNode }) {
-  const ref = useRef<View>(null);
+  const ref = useRef<ViewInstance>(null);
   const [offset, setOffset] = useState(0);
   return (
     <View
@@ -169,11 +170,7 @@ export function formatTime(iso?: string) {
     : `${p(d.getDate())}/${p(d.getMonth() + 1)}`;
 }
 
-/**
- * Gallery: hiển thị danh sách ảnh dạng carousel ngang.
- * Chiều cao tự động tính theo tỉ lệ thực của ảnh đầu tiên
- * để không bao giờ cắt xén ảnh.
- */
+/** Bounded pages keep every photo visible without stretching or changing screen height. */
 export function Gallery({
   images,
   emoji = "🏠",
@@ -183,56 +180,56 @@ export function Gallery({
   emoji?: string;
   height?: number;
 }) {
-  const { width } = useWindowDimensions();
-  const [index, setIndex] = useState(0);
-  const [imgHeight, setImgHeight] = useState(height);
-
-  // Tính chiều cao theo tỉ lệ thực của ảnh đầu tiên
-  useEffect(() => {
-    if (!images?.length) return;
-    const uri = imageUrl(images[0]) as string;
-    if (!uri) return;
-    Image.getSize(
-      uri,
-      (w, h) => {
-        if (w > 0) setImgHeight(Math.round((h / w) * width));
-      },
-      () => setImgHeight(height),
-    );
-  }, [images, width, height]);
-
-  if (!images?.length) {
-    return (
-      <View
-        style={{
-          height,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: colors.card,
-        }}
-      >
-        <Text style={{ fontSize: 56 }}>{emoji}</Text>
-      </View>
-    );
-  }
+  const [width, setWidth] = useState(0);
+  const frameHeight = Number.isFinite(height) ? Math.max(180, Math.min(height, 320)) : 240;
+  const validImages = Array.isArray(images)
+    ? images.filter((uri): uri is string => typeof uri === "string" && Boolean(uri.trim()))
+    : [];
 
   return (
-    <View>
+    <View
+      style={{ width: "100%", height: frameHeight }}
+      onLayout={(event) => {
+        const nextWidth = Math.round(event.nativeEvent.layout.width);
+        if (nextWidth > 0) setWidth(nextWidth);
+      }}
+    >
+      {width > 0 && validImages.length ? (
+        <GalleryPages
+          key={`${width}:${frameHeight}:${JSON.stringify(validImages)}`}
+          images={validImages}
+          width={width}
+          height={frameHeight}
+          emoji={emoji}
+        />
+      ) : (
+        <ListingImage uri={validImages[0]} emoji={emoji} style={{ height: frameHeight }} />
+      )}
+    </View>
+  );
+}
+
+// Remount when the image set or page dimensions change, resetting offset and counter together.
+function GalleryPages({ images, width, height, emoji }: { images: string[]; width: number; height: number; emoji: string }) {
+  const [index, setIndex] = useState(0);
+  return (
+    <>
       <FlatList
         data={images}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         keyExtractor={(u, i) => `${u}-${i}`}
-        onMomentumScrollEnd={(e) =>
-          setIndex(Math.round(e.nativeEvent.contentOffset.x / width))
+        initialNumToRender={2}
+        maxToRenderPerBatch={2}
+        windowSize={3}
+        getItemLayout={(_, itemIndex) => ({ length: width, offset: width * itemIndex, index: itemIndex })}
+        scrollEventThrottle={16}
+        onScroll={(event) =>
+          setIndex(Math.max(0, Math.min(images.length - 1, Math.round(event.nativeEvent.contentOffset.x / width))))
         }
         renderItem={({ item }) => (
-          <Image
-            source={{ uri: imageUrl(item) as string }}
-            style={{ width, height: imgHeight, backgroundColor: colors.card }}
-            resizeMode="contain"
-          />
+          <ListingImage uri={item} emoji={emoji} style={{ width, height }} />
         )}
       />
       {images.length > 1 && (
@@ -240,7 +237,7 @@ export function Gallery({
           {index + 1}/{images.length}
         </Text>
       )}
-    </View>
+    </>
   );
 }
 

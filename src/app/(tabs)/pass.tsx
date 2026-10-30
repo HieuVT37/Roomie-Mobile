@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -6,6 +7,7 @@ import {
     Alert,
     FlatList,
     Image,
+    Platform,
     Pressable,
     RefreshControl,
     ScrollView,
@@ -376,7 +378,7 @@ export default function PassListScreen() {
                             ? "Đã duyệt công khai"
                             : item.moderationStatus === "rejected"
                               ? "Bị từ chối"
-                              : "Đang hiển thị"}
+                              : "Chờ quản trị duyệt"}
                         </Text>
                       </View>
                       <Pressable
@@ -417,6 +419,8 @@ function CreatePassForm({
   onSuccess: (createdItem: any, type: "room" | "item") => void;
 }) {
   const [type, setType] = useState<"item" | "room">("room");
+  const scrollRef = useRef<ScrollView | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   // State riêng biệt cho Pass phòng
   const [roomForm, setRoomForm] = useState({
@@ -445,11 +449,87 @@ function CreatePassForm({
     dealType: "sell",
   });
 
+  // Validation errors
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
   // Hình ảnh (lưu thông tin asset từ ImagePicker)
   const [imageAssets, setImageAssets] = useState<
     ImagePicker.ImagePickerAsset[]
   >([]);
   const [loading, setLoading] = useState(false);
+
+  // Validate form
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (type === "room") {
+      // Validate Pass Phòng
+      if (!roomForm.title.trim()) {
+        newErrors.title = "Vui lòng nhập tiêu đề";
+      } else if (roomForm.title.trim().length < 10) {
+        newErrors.title = "Tiêu đề phải có ít nhất 10 ký tự";
+      } else if (roomForm.title.trim().length > 100) {
+        newErrors.title = "Tiêu đề không được quá 100 ký tự";
+      }
+
+      if (!roomForm.address.trim()) {
+        newErrors.address = "Vui lòng nhập địa chỉ phòng";
+      }
+
+      if (roomForm.price && isNaN(Number(roomForm.price))) {
+        newErrors.price = "Giá phải là số";
+      } else if (roomForm.price && Number(roomForm.price) < 0) {
+        newErrors.price = "Giá không được âm";
+      } else if (roomForm.price && Number(roomForm.price) > 100000000) {
+        newErrors.price = "Giá không hợp lệ (quá 100 triệu)";
+      }
+
+      if (roomForm.deposit && isNaN(Number(roomForm.deposit))) {
+        newErrors.deposit = "Tiền cọc phải là số";
+      } else if (roomForm.deposit && Number(roomForm.deposit) < 0) {
+        newErrors.deposit = "Tiền cọc không được âm";
+      }
+
+      const leaseMonths = roomForm.remainingLeaseMonths.trim();
+      if (!leaseMonths) {
+        newErrors.remainingLeaseMonths = "Vui lòng nhập số tháng hợp đồng còn lại";
+      } else if (isNaN(Number(leaseMonths))) {
+        newErrors.remainingLeaseMonths = "Số tháng phải là số";
+      } else if (Number(leaseMonths) < 0 || Number(leaseMonths) > 120) {
+        newErrors.remainingLeaseMonths = "Số tháng phải từ 0 đến 120";
+      }
+
+    } else {
+      // Validate Pass Đồ
+      if (!itemForm.title.trim()) {
+        newErrors.title = "Vui lòng nhập tên món đồ";
+      } else if (itemForm.title.trim().length < 5) {
+        newErrors.title = "Tên món đồ phải có ít nhất 5 ký tự";
+      } else if (itemForm.title.trim().length > 100) {
+        newErrors.title = "Tên món đồ không được quá 100 ký tự";
+      }
+
+      if (itemForm.dealType !== "give_away") {
+        if (itemForm.price && isNaN(Number(itemForm.price))) {
+          newErrors.price = "Giá phải là số";
+        } else if (itemForm.price && Number(itemForm.price) < 0) {
+          newErrors.price = "Giá không được âm";
+        } else if (itemForm.price && Number(itemForm.price) > 100000000) {
+          newErrors.price = "Giá không hợp lệ (quá 100 triệu)";
+        }
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // Scroll to first error
+  const scrollToError = () => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({ y: 0, animated: true });
+    }
+  };
 
   const pickImages = async () => {
     if (imageAssets.length >= 8) {
@@ -473,13 +553,21 @@ function CreatePassForm({
     setImageAssets((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // Helper render error
+  const ErrorText = ({ field }: { field: string }) => {
+    if (!errors[field]) return null;
+    return (
+      <Text style={{ color: themeColors.danger, fontSize: 12, marginTop: -6 }}>
+        {errors[field]}
+      </Text>
+    );
+  };
+
   const handleSubmit = async () => {
-    const currentTitle = type === "room" ? roomForm.title : itemForm.title;
-    if (!currentTitle.trim() || currentTitle.trim().length < 3) {
-      Alert.alert(
-        "Thiếu thông tin",
-        "Vui lòng nhập tiêu đề từ 3 ký tự trở lên.",
-      );
+    // Validate form
+    if (!validateForm()) {
+      scrollToError();
+      // Không hiển thị Alert nữa, chỉ scroll đến lỗi
       return;
     }
 
@@ -515,42 +603,16 @@ function CreatePassForm({
           : uploadResult.urls || [];
       }
 
-      // 2. Chuẩn bị payload hợp lệ đúng 100% với backend validator
+      // 2. Chuẩn bị payload
       let payload: any;
 
       if (type === "room") {
-        if (!roomForm.address.trim()) {
-          Alert.alert("Thiếu thông tin", "Vui lòng nhập địa chỉ phòng.");
-          setLoading(false);
-          return;
-        }
+        const leaseMonths = Number(roomForm.remainingLeaseMonths);
 
-        const leaseMonths =
-          roomForm.remainingLeaseMonths.trim() !== ""
-            ? Number(roomForm.remainingLeaseMonths)
-            : 0;
-
-        if (isNaN(leaseMonths) || leaseMonths < 0 || leaseMonths > 120) {
-          Alert.alert("Lỗi", "Số tháng hợp đồng còn lại phải từ 0 đến 120.");
-          setLoading(false);
-          return;
-        }
-
-        // Format availableFrom chuẩn YYYY-MM-DD
+        // Format availableFrom chuẩn YYYY-MM-DD (đã được format từ DatePicker)
         let availDate: string | null = null;
         if (roomForm.availableFrom.trim()) {
-          const raw = roomForm.availableFrom.trim();
-          if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(raw)) {
-            const [d, m, y] = raw.split("/");
-            availDate = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
-          } else if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-            availDate = raw;
-          } else {
-            const parsed = new Date(raw);
-            if (!isNaN(parsed.getTime())) {
-              availDate = parsed.toISOString().slice(0, 10);
-            }
-          }
+          availDate = roomForm.availableFrom.trim();
         }
 
         payload = {
@@ -596,11 +658,47 @@ function CreatePassForm({
       const createdListing = res?.listing || res;
 
       Alert.alert(
-        "Thành công",
-        "Đã đăng bài pass mới thành công! Bài viết đã sẵn sàng hiển thị.",
+        "✅ Đã gửi bài đăng",
+        "Bài viết của bạn đang chờ quản trị viên duyệt. Sau khi được duyệt, bài viết sẽ hiển thị công khai.\n\nBạn có thể xem trạng thái ở tab 'Tin của tôi'.",
+        [
+          {
+            text: "Đồng ý",
+            onPress: () => {
+              // Reset form
+              if (type === "room") {
+                setRoomForm({
+                  title: "",
+                  description: "",
+                  price: "",
+                  location: "",
+                  contact: "",
+                  address: "",
+                  deposit: "",
+                  remainingLeaseMonths: "",
+                  availableFrom: "",
+                  landlordAgreed: false,
+                  transferTerms: "",
+                });
+              } else {
+                setItemForm({
+                  title: "",
+                  description: "",
+                  price: "",
+                  location: "",
+                  contact: "",
+                  category: "furniture",
+                  condition: "good",
+                  dealType: "sell",
+                });
+              }
+              setImageAssets([]);
+              setErrors({});
+              onSuccess(createdListing, type);
+            },
+          },
+        ]
       );
 
-      onSuccess(createdListing, type);
     } catch (err: any) {
       const errMsg =
         err.response?.data?.errors?.[0]?.message ||
@@ -613,7 +711,14 @@ function CreatePassForm({
   };
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
+    <ScrollView ref={scrollRef} contentContainerStyle={{ padding: 16, gap: 16 }}>
+      {/* Thông báo về kiểm duyệt */}
+      <View style={{ backgroundColor: "#1e3a8a", padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "#3b82f6" }}>
+        <Text style={{ color: "#93c5fd", fontSize: 13, lineHeight: 20 }}>
+          ℹ️ <Text style={{ fontWeight: "700" }}>Lưu ý:</Text> Tất cả bài đăng cần được quản trị viên duyệt trước khi hiển thị công khai. Mọi chỉnh sửa sau này cũng sẽ cần được duyệt lại.
+        </Text>
+      </View>
+
       {/* 1. Chọn loại bài đăng */}
       <View style={{ flexDirection: "row", gap: 10 }}>
         <Pressable
@@ -638,7 +743,7 @@ function CreatePassForm({
             Tiêu đề <Text style={{ color: themeColors.danger }}>*</Text>
           </Text>
           <TextInput
-            style={s.input}
+            style={[s.input, errors.title && { borderColor: themeColors.danger, borderWidth: 1 }]}
             placeholder={
               type === "room"
                 ? "Pass phòng trọ 25m² Cầu Giấy, đủ đồ..."
@@ -646,12 +751,16 @@ function CreatePassForm({
             }
             placeholderTextColor="#64748b"
             value={type === "room" ? roomForm.title : itemForm.title}
-            onChangeText={(val) =>
+            onChangeText={(val) => {
+              if (errors.title) {
+                setErrors((prev) => ({ ...prev, title: "" }));
+              }
               type === "room"
                 ? setRoomForm({ ...roomForm, title: val })
-                : setItemForm({ ...itemForm, title: val })
-            }
+                : setItemForm({ ...itemForm, title: val });
+            }}
           />
+          <ErrorText field="title" />
 
           <Text style={s.fieldLabel}>Mô tả</Text>
           <TextInput
@@ -681,6 +790,7 @@ function CreatePassForm({
               s.input,
               type === "item" &&
                 itemForm.dealType === "give_away" && { opacity: 0.6 },
+              errors.price && { borderColor: themeColors.danger, borderWidth: 1 },
             ]}
             placeholder="Giá (VNĐ)"
             placeholderTextColor="#64748b"
@@ -693,12 +803,16 @@ function CreatePassForm({
                   ? "0"
                   : itemForm.price
             }
-            onChangeText={(val) =>
+            onChangeText={(val) => {
+              if (errors.price) {
+                setErrors((prev) => ({ ...prev, price: "" }));
+              }
               type === "room"
                 ? setRoomForm({ ...roomForm, price: val })
-                : setItemForm({ ...itemForm, price: val })
-            }
+                : setItemForm({ ...itemForm, price: val });
+            }}
           />
+          <ErrorText field="price" />
 
           <Text style={s.fieldLabel}>Khu vực (quận, thành phố)</Text>
           <TextInput
@@ -740,48 +854,73 @@ function CreatePassForm({
               <Text style={{ color: themeColors.danger }}>*</Text>
             </Text>
             <TextInput
-              style={s.input}
+              style={[s.input, errors.address && { borderColor: themeColors.danger, borderWidth: 1 }]}
               placeholder="VD: Số 12 ngõ 45 Cầu Giấy, Hà Nội"
               placeholderTextColor="#64748b"
               value={roomForm.address}
-              onChangeText={(val) => setRoomForm({ ...roomForm, address: val })}
+              onChangeText={(val) => {
+                if (errors.address) setErrors((prev) => ({ ...prev, address: "" }));
+                setRoomForm({ ...roomForm, address: val });
+              }}
             />
+            <ErrorText field="address" />
 
             <Text style={s.fieldLabel}>Tiền cọc (VNĐ)</Text>
             <TextInput
-              style={s.input}
+              style={[s.input, errors.deposit && { borderColor: themeColors.danger, borderWidth: 1 }]}
               placeholder="VD: 3000000"
               placeholderTextColor="#64748b"
               keyboardType="numeric"
               value={roomForm.deposit}
-              onChangeText={(val) => setRoomForm({ ...roomForm, deposit: val })}
+              onChangeText={(val) => {
+                if (errors.deposit) setErrors((prev) => ({ ...prev, deposit: "" }));
+                setRoomForm({ ...roomForm, deposit: val });
+              }}
             />
+            <ErrorText field="deposit" />
 
             <Text style={s.fieldLabel}>
               Số tháng hợp đồng còn lại (0 - 120){" "}
               <Text style={{ color: themeColors.danger }}>*</Text>
             </Text>
             <TextInput
-              style={s.input}
+              style={[s.input, errors.remainingLeaseMonths && { borderColor: themeColors.danger, borderWidth: 1 }]}
               placeholder="VD: 6 (tháng)"
               placeholderTextColor="#64748b"
               keyboardType="numeric"
               value={roomForm.remainingLeaseMonths}
-              onChangeText={(val) =>
-                setRoomForm({ ...roomForm, remainingLeaseMonths: val })
-              }
+              onChangeText={(val) => {
+                if (errors.remainingLeaseMonths) setErrors((prev) => ({ ...prev, remainingLeaseMonths: "" }));
+                setRoomForm({ ...roomForm, remainingLeaseMonths: val });
+              }}
             />
+            <ErrorText field="remainingLeaseMonths" />
 
-            <Text style={s.fieldLabel}>Bàn giao từ ngày (dd/mm/yyyy)</Text>
-            <TextInput
+            <Text style={s.fieldLabel}>Bàn giao từ ngày</Text>
+            <Pressable
               style={s.input}
-              placeholder="VD: 01/11/2026 hoặc 2026-11-01"
-              placeholderTextColor="#64748b"
-              value={roomForm.availableFrom}
-              onChangeText={(val) =>
-                setRoomForm({ ...roomForm, availableFrom: val })
-              }
-            />
+              onPress={() => setShowDatePicker(true)}
+            >
+              <Text style={{ color: roomForm.availableFrom ? themeColors.text : "#64748b" }}>
+                {roomForm.availableFrom 
+                  ? new Date(roomForm.availableFrom).toLocaleDateString("vi-VN")
+                  : "Chọn ngày bàn giao"}
+              </Text>
+            </Pressable>
+            {showDatePicker && (
+              <DateTimePicker
+                value={roomForm.availableFrom ? new Date(roomForm.availableFrom) : new Date()}
+                mode="date"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                onChange={(event, selectedDate) => {
+                  setShowDatePicker(Platform.OS === "ios");
+                  if (selectedDate) {
+                    const formatted = selectedDate.toISOString().split("T")[0];
+                    setRoomForm({ ...roomForm, availableFrom: formatted });
+                  }
+                }}
+              />
+            )}
 
             <View style={s.switchRow}>
               <View style={{ flex: 1, paddingRight: 8 }}>

@@ -51,7 +51,12 @@
           "icon": "./assets/images/roomie-logo.png",
           "color": "#6366f1"
         }
-      ]
+      ],
+      "expo-font",
+      "expo-image",
+      "expo-status-bar",
+      "expo-web-browser",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,
