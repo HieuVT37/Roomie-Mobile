@@ -1,71 +1,126 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigation } from "expo-router";
+import {
+  createListRequestGate,
+  ListResponseError,
+  mergeListItems,
+  normalizeListResponse,
+  runListRequest,
+  sameListScope,
+} from "./infinite-list-utils";
 
-// Danh sách phân trang: tải trang 1, kéo xuống để làm mới, cuộn tới cuối để tải thêm.
-// fetchPage(page) phải trả về { items, page, pages } như API của server.
-export function useInfiniteList(fetchPage: (page: number) => Promise<any>, deps: any[] = []) {
-  const [items, setItems] = useState<any[]>([]);
-  const [page, setPage] = useState(1);
-  const [pages, setPages] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState("");
-  const [errorCode, setErrorCode] = useState("");
-  const reqId = useRef(0); // bỏ qua kết quả của request cũ khi đã có request mới hơn
-  const moreBusy = useRef(false);
+export interface InfiniteListOptions {
+  enabled?: boolean;
+}
+
+function initialState(scope: readonly unknown[], enabled: boolean) {
+  return {
+    scope: [...scope],
+    enabled,
+    items: [] as any[],
+    page: 1,
+    pages: 1,
+    loading: enabled,
+    refreshing: false,
+    loadingMore: false,
+    error: "",
+    errorCode: "",
+  };
+}
+
+// Callers include query, tab and user identity in deps when those change the data.
+export function useInfiniteList(
+  fetchPage: (page: number) => Promise<unknown>,
+  deps: readonly unknown[] = [],
+  { enabled = true }: InfiniteListOptions = {},
+) {
+  const [state, setState] = useState(() => initialState(deps, enabled));
+  const [requests] = useState(createListRequestGate);
   const fetchRef = useRef(fetchPage);
+
+  // Reset before children receive data from the previous user/filter. This
+  // guarded render adjustment avoids displaying an old list for one frame.
+  if (!sameListScope(state.scope, deps) || state.enabled !== enabled) {
+    setState(initialState(deps, enabled));
+  }
+
   useEffect(() => {
     fetchRef.current = fetchPage;
   });
 
-  const load = useCallback(async (nextPage: number, replace: boolean) => {
-    const id = ++reqId.current;
-    try {
-      const data = await fetchRef.current(nextPage);
-      if (id !== reqId.current) return;
-      setPage(data.page);
-      setPages(data.pages);
-      setItems((prev) => {
-        if (replace) return data.items;
-        const key = (i: any) => i.id ?? i.userId;
-        const seen = new Set(prev.map(key));
-        return [...prev, ...data.items.filter((i: any) => !seen.has(key(i)))];
+  const load = useCallback(
+    (nextPage: number, append: boolean, scope: readonly unknown[]) => {
+      const update = (change: (current: typeof state) => typeof state) => {
+        setState((current) =>
+          current.enabled && sameListScope(current.scope, scope) ? change(current) : current,
+        );
+      };
+      return runListRequest(requests, () => fetchRef.current(nextPage), {
+        resolve: (response) => {
+          const data = normalizeListResponse(response, nextPage);
+          update((current) => ({
+            ...current,
+            items: append ? mergeListItems(current.items, data.items) : data.items,
+            page: data.page,
+            pages: data.pages,
+            error: "",
+            errorCode: "",
+          }));
+        },
+        reject: (error) => {
+          const err = error as any;
+          const serverMessage = typeof err?.response?.data?.message === "string"
+            ? err.response.data.message
+            : "";
+          const serverCode = typeof err?.response?.data?.code === "string"
+            ? err.response.data.code
+            : "";
+          update((current) => ({
+            ...current,
+            errorCode: serverCode,
+            error: err?.code === "ECONNABORTED"
+              ? "Máy chủ đang khởi động, hãy kéo xuống để thử lại"
+              : serverMessage ||
+                (err instanceof ListResponseError ? err.message : "Không tải được danh sách"),
+          }));
+        },
+        settled: () => update((current) => ({
+          ...current,
+          loading: false,
+          refreshing: false,
+          loadingMore: false,
+        })),
       });
-      setError("");
-      setErrorCode("");
-    } catch (err: any) {
-      if (id !== reqId.current) return;
-      if (replace) setItems([]);
-      setErrorCode(err.response?.data?.code || "");
-      setError(
-        err.code === "ECONNABORTED"
-          ? "Máy chủ đang khởi động, hãy kéo xuống để thử lại"
-          : err.response?.data?.message || "Không tải được danh sách"
-      );
-    }
-  }, []);
+    },
+    [requests],
+  );
 
   useEffect(() => {
-    setLoading(true);
-    load(1, true).finally(() => setLoading(false));
+    requests.invalidate();
+    if (enabled) void load(1, false, deps);
+    return () => requests.invalidate();
+    // fetchPage is kept current separately; callers explicitly select reset deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, [enabled, load, requests, ...deps]);
 
-  const refresh = async () => {
-    setRefreshing(true);
-    await load(1, true);
-    setRefreshing(false);
+  const refresh = (): Promise<void> => {
+    if (!enabled || state.loading || state.refreshing || state.loadingMore || requests.isBusy()) {
+      return Promise.resolve();
+    }
+    setState((current) => ({ ...current, refreshing: true, error: "", errorCode: "" }));
+    return load(1, false, state.scope);
   };
 
   const loadMore = () => {
-    if (moreBusy.current || loading || page >= pages) return;
-    moreBusy.current = true;
-    load(page + 1, false).finally(() => {
-      moreBusy.current = false;
-    });
+    if (!enabled || state.loading || state.refreshing || state.loadingMore || requests.isBusy() || state.page >= state.pages) {
+      return;
+    }
+    setState((current) => ({ ...current, loadingMore: true, error: "", errorCode: "" }));
+    void load(state.page + 1, true, state.scope);
   };
 
-  return { items, loading, refreshing, error, errorCode, refresh, loadMore };
+  const { items, loading, refreshing, loadingMore, error, errorCode } = state;
+  return { items, loading, refreshing, loadingMore, error, errorCode, refresh, loadMore };
 }
 
 // Bấm lại vào tab đang mở thì cuộn danh sách về đầu trang

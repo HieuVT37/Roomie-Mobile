@@ -1,6 +1,7 @@
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Linking,
   Pressable,
   ScrollView,
@@ -39,7 +40,7 @@ function CustomRow({
   label: string;
   value?: string | number | null;
 }) {
-  if (!value && value !== 0) return null;
+  if ((typeof value !== "string" && typeof value !== "number") || value === "") return null;
   return (
     <View style={sRow.row}>
       <Text style={sRow.label}>{label}</Text>
@@ -49,43 +50,82 @@ function CustomRow({
 }
 
 export default function AccommodationDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id: routeId } = useLocalSearchParams<{ id: string | string[] }>();
+  const { user } = useAuth();
+  const id = Array.isArray(routeId) ? routeId[0] : routeId;
+  const sessionKey = user?.id || user?._id || user?.email || "guest";
+  return <AccommodationDetailContent key={`${id}:${sessionKey}`} id={id} />;
+}
+
+function AccommodationDetailContent({ id }: { id?: string }) {
   const router = useRouter();
   const { user } = useAuth();
   const bottom = useBottomPad();
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState("");
   const [fav, setFav] = useState(false);
+  const [favoriteBusy, setFavoriteBusy] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const mounted = useRef(true);
+  const favoritePending = useRef(false);
 
-  // Tải lại khi đăng nhập thay đổi để có số điện thoại liên hệ và trạng thái yêu thích
+  // Identity/session changes remount this content, so private data and pending requests stay separate.
   useEffect(() => {
     let active = true;
-    getAccommodationApi(id)
+    mounted.current = true;
+    const load = id ? getAccommodationApi(id) : Promise.reject(new Error("Đường dẫn tin không hợp lệ."));
+    load
       .then((res) => {
         if (!active) return;
+        if (!res?.listing || typeof res.listing !== "object" || Array.isArray(res.listing)) {
+          throw new Error("Dữ liệu tin không hợp lệ. Vui lòng thử lại.");
+        }
         setData(res);
         setFav(Boolean(res.isFavorite));
+        setError("");
       })
-      .catch(
-        (err) =>
-          active &&
-          setError(err.response?.data?.message || "Không tải được tin"),
-      );
+      .catch((err) => {
+        if (active) setError(err.response?.data?.message || err.message || "Không tải được tin");
+      });
     return () => {
       active = false;
+      mounted.current = false;
     };
-  }, [id, user?.id]);
+  }, [id, attempt]);
+
+  const retry = () => {
+    setError("");
+    setData(null);
+    setAttempt((value) => value + 1);
+  };
 
   const toggleFavorite = async () => {
     if (!user) return router.push("/login");
+    if (!id || favoritePending.current) return;
+    favoritePending.current = true;
+    setFavoriteBusy(true);
     const next = !fav;
     setFav(next);
     try {
       await (next
         ? addFavoriteApi("accommodation", id)
         : removeFavoriteApi("accommodation", id));
+    } catch (err: any) {
+      if (mounted.current) {
+        setFav(!next);
+        Alert.alert("Không cập nhật được yêu thích", err.response?.data?.message || "Vui lòng thử lại.");
+      }
+    } finally {
+      favoritePending.current = false;
+      if (mounted.current) setFavoriteBusy(false);
+    }
+  };
+
+  const callOwner = async (phone: string) => {
+    try {
+      await Linking.openURL(`tel:${phone}`);
     } catch {
-      setFav(!next);
+      Alert.alert("Không mở được cuộc gọi", "Thiết bị không thể mở ứng dụng gọi điện. Vui lòng thử lại hoặc gọi số liên hệ thủ công.");
     }
   };
 
@@ -93,20 +133,28 @@ export default function AccommodationDetailScreen() {
     return (
       <View style={s.center}>
         <Text style={s.error}>{error}</Text>
+        <Pressable style={s.button} onPress={retry} accessibilityRole="button">
+          <Text style={s.buttonText}>Thử lại</Text>
+        </Pressable>
       </View>
     );
   if (!data) return <Loading />;
 
-  const { listing: l, owner, isOwner, contactPhone } = data;
-  const address = [
+  const { listing: l, isOwner } = data;
+  const contactPhone = typeof data.contactPhone === "string" || typeof data.contactPhone === "number" ? data.contactPhone : null;
+  const owner = data.owner && typeof data.owner === "object" ? data.owner : {};
+  const title = typeof l.title === "string" ? l.title : "Chi tiết phòng trọ";
+  const address = typeof l.address === "string" ? l.address : [
     l.address?.street,
     l.address?.ward,
     l.address?.district,
     l.address?.city,
   ]
-    .filter(Boolean)
+    .filter((part) => typeof part === "string" && part.trim())
     .join(", ");
-  const costs = l.extraCosts || {};
+  const costs = l.extraCosts && typeof l.extraCosts === "object" ? l.extraCosts : {};
+  const amenities = Array.isArray(l.amenities) ? l.amenities.filter((amenity: unknown) => typeof amenity === "string") : [];
+  const availableDate = l.availableFrom ? new Date(l.availableFrom) : null;
 
   return (
     <ScrollView
@@ -115,7 +163,7 @@ export default function AccommodationDetailScreen() {
     >
       <Stack.Screen
         options={{
-          title: l.title || "Chi tiết phòng trọ",
+          title,
           headerStyle: { backgroundColor: themeColors.card },
           headerTintColor: themeColors.text,
           headerShadowVisible: false,
@@ -130,17 +178,17 @@ export default function AccommodationDetailScreen() {
             <Text style={s.muted}> /tháng</Text>
           </Text>
           {!isOwner && (
-            <Pressable onPress={toggleFavorite} style={{ marginLeft: "auto" }}>
+            <Pressable onPress={toggleFavorite} disabled={favoriteBusy} accessibilityRole="button" accessibilityLabel={fav ? "Bỏ yêu thích" : "Thêm yêu thích"} style={{ marginLeft: "auto", opacity: favoriteBusy ? 0.5 : 1 }}>
               <Text style={{ fontSize: 26 }}>{fav ? "❤️" : "🤍"}</Text>
             </Pressable>
           )}
         </View>
-        <Text style={s.title}>{l.title}</Text>
+        <Text style={s.title}>{title}</Text>
         {address ? <Text style={s.muted}>📍 {address}</Text> : null}
         <Text style={s.muted}>{(LISTING_STATUS_LABELS as any)[l.status]}</Text>
       </View>
 
-      {l.description ? (
+      {typeof l.description === "string" && l.description ? (
         <View style={s.card}>
           <Text style={s.h2}>Mô tả</Text>
           <Text style={{ color: themeColors.text, lineHeight: 22 }}>
@@ -155,7 +203,7 @@ export default function AccommodationDetailScreen() {
           label="Loại phòng"
           value={(ROOM_TYPE_LABELS as any)[l.roomType]}
         />
-        <CustomRow label="Diện tích" value={l.area && `${l.area} m²`} />
+        <CustomRow label="Diện tích" value={l.area != null ? `${l.area} m²` : null} />
         <CustomRow label="Số người tối đa" value={l.maxOccupants} />
         <CustomRow
           label="Tiền cọc"
@@ -164,28 +212,28 @@ export default function AccommodationDetailScreen() {
         <CustomRow
           label="Có thể dọn vào"
           value={
-            l.availableFrom &&
-            new Date(l.availableFrom).toLocaleDateString("vi-VN")
+            availableDate && !Number.isNaN(availableDate.getTime())
+              ? availableDate.toLocaleDateString("vi-VN") : null
           }
         />
         <CustomRow
           label="Giá điện"
           value={
-            costs.electricity ? `${formatVND(costs.electricity)}/kWh` : null
+            costs.electricity != null ? `${formatVND(costs.electricity)}/kWh` : null
           }
         />
         <CustomRow
           label="Giá nước"
-          value={costs.water ? formatVND(costs.water) : null}
+          value={costs.water != null ? formatVND(costs.water) : null}
         />
         <CustomRow
           label="Internet"
-          value={costs.internet ? formatVND(costs.internet) : null}
+          value={costs.internet != null ? formatVND(costs.internet) : null}
         />
         <CustomRow label="Chi phí khác" value={costs.other} />
       </View>
 
-      {l.amenities?.length > 0 && (
+      {amenities.length > 0 && (
         <View style={s.card}>
           <Text style={s.h2}>Tiện nghi</Text>
           <View
@@ -196,14 +244,14 @@ export default function AccommodationDetailScreen() {
               marginTop: 4,
             }}
           >
-            {l.amenities.map((a: string) => (
-              <Chip key={a} text={a} />
+            {amenities.map((a: string, index: number) => (
+              <Chip key={`${a}-${index}`} text={a} />
             ))}
           </View>
         </View>
       )}
 
-      {l.rentalTerms ? (
+      {typeof l.rentalTerms === "string" && l.rentalTerms ? (
         <View style={s.card}>
           <Text style={s.h2}>Điều khoản thuê</Text>
           <Text style={{ color: themeColors.text, lineHeight: 22 }}>
@@ -217,13 +265,13 @@ export default function AccommodationDetailScreen() {
         <Text
           style={{ fontWeight: "600", color: themeColors.text, fontSize: 16 }}
         >
-          {owner.displayName}
+          {typeof owner.displayName === "string" ? owner.displayName : "Chưa có thông tin chủ trọ"}
         </Text>
         {user ? (
           contactPhone ? (
             <Pressable
               style={s.button}
-              onPress={() => Linking.openURL(`tel:${contactPhone}`)}
+              onPress={() => callOwner(String(contactPhone))}
             >
               <Text style={s.buttonText}>📞 Gọi {contactPhone}</Text>
             </Pressable>
@@ -237,10 +285,12 @@ export default function AccommodationDetailScreen() {
         )}
         {user && !isOwner && user.role !== "admin" && (
           <View style={{ marginTop: 8 }}>
-            <MessageOwnerButton
-              userId={owner.userId}
-              name={owner.displayName}
-            />
+            {typeof owner.userId === "string" && owner.userId ? (
+              <MessageOwnerButton
+                userId={owner.userId}
+                name={typeof owner.displayName === "string" ? owner.displayName : undefined}
+              />
+            ) : <Text style={s.muted}>Chưa có thông tin tài khoản để nhắn tin.</Text>}
           </View>
         )}
       </View>

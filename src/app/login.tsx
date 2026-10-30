@@ -38,9 +38,8 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login(email.trim().toLowerCase(), password);
-      // Quay lại màn trước đó nếu có, không thì về trang chủ
       if (router.canGoBack()) router.back();
-      else router.replace("/");
+      else router.replace("/(tabs)");
     } catch (err: any) {
       setError(
         err.code === "ECONNABORTED"
