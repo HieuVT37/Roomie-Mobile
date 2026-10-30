@@ -1,6 +1,7 @@
-import { useRouter } from "expo-router";
-import { useRef, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useRef, useState } from "react";
 import {
+  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -15,7 +16,7 @@ import {
   listAccommodationsApi,
   myAccommodationsApi,
 } from "../../api/accommodations";
-import { useAuth } from "../../auth/AuthContext";
+import { myBillingApi } from "../../api/billing";
 import { AccommodationCard } from "../../components/cards";
 import { Loading, Segments, shared } from "../../components/ui";
 import {
@@ -37,41 +38,33 @@ export default function AccommodationListScreen() {
   const [tab, setTab] = useState("search"); // "search" | "mine" | "create"
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
-  const { user } = useAuth();
 
   const listRef = useRef<FlatList>(null);
   useTabPressScrollTop(listRef);
 
-  // --- KIỂM TRA QUYỀN VIP (PLUS / PRO) THÔNG MINH & TOÀN DIỆN ---
-  const checkIsVip = (u: any): boolean => {
-    if (!u) return false;
+  // --- LẤY GÓI HIỆN TẠI TỪ SERVER (GET /billing/me) ---
+  const [plan, setPlan] = useState<string | null>(null);
+  const [planLoading, setPlanLoading] = useState(true);
 
-    // Thu thập tất cả các giá trị có thể biểu thị gói dịch vụ
-    const possibleValues = [
-      u.tier,
-      u.plan,
-      u.package,
-      u.role,
-      u.subscription,
-      u.subscription?.tier,
-      u.subscription?.plan,
-      u.subscription?.name,
-      u.subscriptionType,
-    ];
+  // Gọi lại mỗi khi màn hình được focus (vd: vừa nâng cấp xong quay lại)
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      myBillingApi()
+        .then((r) => {
+          if (alive) setPlan(r?.plan ? String(r.plan).toLowerCase() : null);
+        })
+        .catch((e) => console.log("myBilling error:", e))
+        .finally(() => {
+          if (alive) setPlanLoading(false);
+        });
+      return () => {
+        alive = false;
+      };
+    }, []),
+  );
 
-    for (const val of possibleValues) {
-      if (!val) continue;
-      const strVal =
-        typeof val === "object" ? JSON.stringify(val) : String(val);
-      const lower = strVal.toLowerCase();
-      if (lower.includes("pro") || lower.includes("plus")) {
-        return true;
-      }
-    }
-    return false;
-  };
-
-  const isVipUser = checkIsVip(user);
+  const isVipUser = plan === "pro" || plan === "plus";
 
   const list = useInfiniteList(
     (p) =>
@@ -94,21 +87,27 @@ export default function AccommodationListScreen() {
         ]}
       />
 
-      {/* Trường hợp chọn tab 'Tin mới' */}
+      {/* Tab 'Tin mới' */}
       {tab === "create" ? (
-        isVipUser ? (
+        planLoading ? (
+          <Loading />
+        ) : isVipUser ? (
           <CreateAccommodationForm onSuccess={() => setTab("mine")} />
         ) : (
           <UpgradeNoticeBanner title="Đăng tin cho thuê phòng mới" />
         )
       ) : null}
 
-      {/* Trường hợp chọn tab 'Tin của tôi' nhưng không đủ quyền */}
+      {/* Tab 'Tin của tôi' nhưng không đủ quyền */}
       {tab === "mine" && !isVipUser ? (
-        <UpgradeNoticeBanner title="Quản lý bài đăng của tôi" />
+        planLoading ? (
+          <Loading />
+        ) : (
+          <UpgradeNoticeBanner title="Quản lý bài đăng của tôi" />
+        )
       ) : null}
 
-      {/* Trường hợp danh sách 'Tìm phòng' hoặc 'Tin của tôi' hợp lệ */}
+      {/* Danh sách 'Tìm phòng' hoặc 'Tin của tôi' hợp lệ */}
       {(tab === "search" || (tab === "mine" && isVipUser)) && (
         <>
           {tab === "search" && (
@@ -206,6 +205,7 @@ function CreateAccommodationForm({ onSuccess }: { onSuccess: () => void }) {
 
   const handleSubmit = async () => {
     if (!title.trim() || !address.trim()) {
+      Alert.alert("Thiếu thông tin", "Vui lòng nhập tiêu đề và địa chỉ.");
       return;
     }
 
@@ -221,6 +221,10 @@ function CreateAccommodationForm({ onSuccess }: { onSuccess: () => void }) {
       onSuccess();
     } catch (err: any) {
       console.log(err);
+      Alert.alert(
+        "Không thể đăng tin",
+        err?.response?.data?.message || "Đã có lỗi xảy ra, vui lòng thử lại.",
+      );
     } finally {
       setLoading(false);
     }
