@@ -1,16 +1,16 @@
 import { Tabs } from "expo-router";
-import { Text } from "react-native";
+import { Text, View, Pressable, StyleSheet } from "react-native";
 import { AIChatButton } from "../../components/AIChat";
 import { useNotifications } from "../../context/NotificationContext";
+import { useLanguage } from "../../context/LanguageContext";
 
-// Tông màu chủ đạo Dark Theme (Tím / Xanh đen)
 const themeColors = {
-  bg: "#0f172a", // Nền chính
-  card: "#1e293b", // Nền Header & TabBar
-  border: "#334155", // Viền
-  text: "#f8fafc", // Chữ chính sáng
-  muted: "#94a3b8", // Chữ/Icon phụ
-  primary: "#6366f1", // Tím điểm nhấn
+  bg: "#0f172a",
+  card: "#1e293b",
+  border: "#334155",
+  text: "#f8fafc",
+  muted: "#94a3b8",
+  primary: "#6366f1",
 };
 
 const icon = (emoji: string) =>
@@ -22,12 +22,24 @@ const icon = (emoji: string) =>
 
 export default function TabsLayout() {
   const unread = useNotifications();
+  const { language, toggleLanguage, t } = useLanguage();
+
   return (
     <Tabs
       //@ts-ignore
       initialRouteName="connections"
       screenOptions={{
-        headerRight: () => <AIChatButton />,
+        // Gộp chung cả nút chuyển ngôn ngữ và nút AI Chat ở đây để không bị trùng lặp
+        headerRight: () => (
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Pressable style={s.langBtn} onPress={toggleLanguage}>
+              <Text style={s.langText}>
+                {language === "vi" ? "🇻🇳 VI" : "🇬🇧 EN"}
+              </Text>
+            </Pressable>
+            <AIChatButton />
+          </View>
+        ),
         tabBarActiveTintColor: themeColors.primary,
         tabBarInactiveTintColor: themeColors.muted,
         tabBarStyle: {
@@ -49,16 +61,16 @@ export default function TabsLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{ title: "Tìm phòng", tabBarIcon: icon("🏠") }}
+        options={{ title: t.tabs.home, tabBarIcon: icon("🏠") }}
       />
       <Tabs.Screen
         name="pass"
-        options={{ title: "Pass", tabBarIcon: icon("📦") }}
+        options={{ title: t.tabs.pass, tabBarIcon: icon("📦") }}
       />
       <Tabs.Screen
         name="connections"
         options={{
-          title: "Kết nối",
+          title: t.tabs.connections,
           tabBarIcon: icon("🤝"),
           tabBarBadge: unread.connections > 0 ? unread.connections : undefined,
           tabBarBadgeStyle: {
@@ -70,7 +82,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="messages"
         options={{
-          title: "Tin nhắn",
+          title: t.tabs.messages,
           tabBarIcon: icon("💬"),
           tabBarBadge: unread.messages > 0 ? unread.messages : undefined,
           tabBarBadgeStyle: {
@@ -81,8 +93,25 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="account"
-        options={{ title: "Tài khoản", tabBarIcon: icon("👤") }}
+        options={{ title: t.tabs.account, tabBarIcon: icon("👤") }}
       />
     </Tabs>
   );
 }
+
+const s = StyleSheet.create({
+  langBtn: {
+    marginRight: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: "#312e81",
+    borderWidth: 1,
+    borderColor: "#6366f1",
+  },
+  langText: {
+    color: "#f8fafc",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+});

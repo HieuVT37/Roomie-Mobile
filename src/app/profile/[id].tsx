@@ -16,13 +16,14 @@ import { startConversationApi } from "../../api/conversations";
 import { getMatchApi } from "../../api/matching";
 import { useAuth } from "../../auth/AuthContext";
 import { Avatar, Loading, useBottomPad } from "../../components/ui";
+import { useLanguage } from "../../context/LanguageContext";
 import {
-  CRITERIA_LABELS,
-  GENDER_LABELS,
-  GUEST_LABELS,
-  PATTERN_LABELS,
-  SHARED_LABELS,
-  formatBudget,
+  formatBudgetLocalized,
+  getLocalizedCriteriaLabel,
+  getLocalizedGenderLabel,
+  getLocalizedGuestLabel,
+  getLocalizedPatternLabel,
+  getLocalizedSharedLabel,
 } from "../../utils/labels";
 
 const themeColors = {
@@ -36,8 +37,6 @@ const themeColors = {
   warning: "#d97706",
   danger: "#ef4444",
 };
-
-const yesNo = (v?: boolean) => (v ? "Có" : "Không");
 
 function InfoRow({
   label,
@@ -104,9 +103,9 @@ export default function UserDetailScreen() {
   }>();
   const router = useRouter();
   const { user: currentUser } = useAuth();
+  const { language, toggleLanguage, t } = useLanguage();
   const bottom = useBottomPad(20);
 
-  // Parse dữ liệu sơ bộ truyền từ trang trước (nếu có)
   const initialData = useMemo(() => {
     if (!initialDataParam) return null;
     try {
@@ -134,9 +133,7 @@ export default function UserDetailScreen() {
       })
       .catch((err) => {
         if (!active) return;
-        const msg =
-          err.response?.data?.message ||
-          "Không thể tải thêm thông tin chi tiết từ máy chủ.";
+        const msg = err.response?.data?.message || t.profile.loadError;
         setErrorMsg(msg);
       })
       .finally(() => {
@@ -146,20 +143,24 @@ export default function UserDetailScreen() {
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [id, t.profile.loadError]);
 
-  // Hợp nhất dữ liệu: ưu tiên dữ liệu đầy đủ từ API, fallback sang initialData
   const p = detailData?.profile || initialData || {};
   const match = detailData?.match || initialData?.match;
   const relation = detailData?.relation || initialData?.relation || {};
 
-  const displayName = p.displayName || p.fullName || p.name || "Người dùng";
+  const displayName =
+    p.displayName || p.fullName || p.name || t.profile.defaultName;
   const avatarUrl = p.avatarUrl;
   const age = p.age;
-  const gender = (GENDER_LABELS as any)[p.gender] || p.gender;
+  const gender = p.gender ? getLocalizedGenderLabel(p.gender, language) : null;
   const school = p.school;
   const occupation = p.occupation;
-  const subInfo = [age && `${age} tuổi`, gender, school || occupation]
+  const subInfo = [
+    age && `${age} ${t.profile.ageSuffix}`,
+    gender,
+    school || occupation,
+  ]
     .filter(Boolean)
     .join(" · ");
 
@@ -177,6 +178,8 @@ export default function UserDetailScreen() {
   const interests: string[] = p.interests || [];
   const requirements: string[] = p.requirements || [];
 
+  const yesNo = (v?: boolean) => (v ? t.common.yes : t.common.no);
+
   const currentStatus = sentSuccess
     ? "sent"
     : relation?.status || (initialData?.relation?.status ?? "none");
@@ -186,24 +189,22 @@ export default function UserDetailScreen() {
     (String(currentUser.id) === String(id) ||
       String(currentUser._id) === String(id));
 
-  // Gửi kết nối
   const handleConnect = async () => {
     setBusyAction(true);
     try {
       await sendRequestApi(id);
       setSentSuccess(true);
-      Alert.alert("Thành công", "Đã gửi yêu cầu kết nối!");
+      Alert.alert(t.common.success, t.profile.connectSentSuccess);
     } catch (err: any) {
       Alert.alert(
-        "Không gửi được yêu cầu",
-        err.response?.data?.message || "Có lỗi xảy ra, vui lòng thử lại.",
+        t.profile.connectSendErrorTitle,
+        err.response?.data?.message || t.profile.connectSendErrorMsg,
       );
     } finally {
       setBusyAction(false);
     }
   };
 
-  // Mở đoạn chat
   const handleOpenChat = async () => {
     setBusyAction(true);
     try {
@@ -214,8 +215,8 @@ export default function UserDetailScreen() {
       });
     } catch (err: any) {
       Alert.alert(
-        "Lỗi",
-        err.response?.data?.message || "Không thể mở cuộc trò chuyện.",
+        t.common.error,
+        err.response?.data?.message || t.profile.openChatError,
       );
     } finally {
       setBusyAction(false);
@@ -223,7 +224,7 @@ export default function UserDetailScreen() {
   };
 
   if (loading) {
-    return <Loading text="Đang tải thông tin hồ sơ..." />;
+    return <Loading text={t.profile.loadingProfile} />;
   }
 
   if (!p || (!p.displayName && !p.userId && errorMsg)) {
@@ -231,14 +232,21 @@ export default function UserDetailScreen() {
       <View style={s.center}>
         <Stack.Screen
           options={{
-            title: "Hồ sơ cá nhân",
+            title: t.profile.title,
             headerStyle: { backgroundColor: themeColors.card },
             headerTintColor: themeColors.text,
+            headerRight: () => (
+              <Pressable style={s.langBtn} onPress={toggleLanguage}>
+                <Text style={s.langText}>
+                  {language === "vi" ? "🇻🇳 VI" : "🇬🇧 EN"}
+                </Text>
+              </Pressable>
+            ),
           }}
         />
-        <Text style={s.errorText}>{errorMsg || "Không tìm thấy hồ sơ"}</Text>
+        <Text style={s.errorText}>{errorMsg || t.profile.notFound}</Text>
         <Pressable style={s.primaryButton} onPress={() => router.back()}>
-          <Text style={s.buttonText}>Quay lại</Text>
+          <Text style={s.buttonText}>{t.common.back}</Text>
         </Pressable>
       </View>
     );
@@ -255,10 +263,16 @@ export default function UserDetailScreen() {
           headerStyle: { backgroundColor: themeColors.card },
           headerTintColor: themeColors.text,
           headerShadowVisible: false,
+          headerRight: () => (
+            <Pressable style={s.langBtn} onPress={toggleLanguage}>
+              <Text style={s.langText}>
+                {language === "vi" ? "🇻🇳 VI" : "🇬🇧 EN"}
+              </Text>
+            </Pressable>
+          ),
         }}
       />
 
-      {/* Thông báo nếu có lỗi quota hoặc lưu ý */}
       {errorMsg && initialData ? (
         <View style={s.noticeCard}>
           <Text style={s.noticeText}>ℹ️ {errorMsg}</Text>
@@ -288,18 +302,19 @@ export default function UserDetailScreen() {
               ]}
             >
               <Text style={s.scoreText}>{Math.round(match.score)}%</Text>
-              <Text style={{ color: "#fff", fontSize: 10 }}>Phù hợp</Text>
+              <Text style={{ color: "#fff", fontSize: 10 }}>
+                {t.profile.matchBadge}
+              </Text>
             </View>
           ) : null}
         </View>
 
-        {/* Tiêu chí bắt buộc không đạt */}
         {match?.failedDealBreakers && match.failedDealBreakers.length > 0 ? (
           <View style={s.warningBox}>
             <Text style={s.warningText}>
-              ⚠️ Không đạt tiêu chí bắt buộc:{" "}
+              ⚠️ {t.profile.failedDealBreakers}{" "}
               {match.failedDealBreakers
-                .map((k: string) => (CRITERIA_LABELS as any)[k] || k)
+                .map((k: string) => getLocalizedCriteriaLabel(k, language))
                 .join(", ")}
             </Text>
           </View>
@@ -309,7 +324,7 @@ export default function UserDetailScreen() {
       {/* Giới thiệu bản thân */}
       {bio ? (
         <View style={s.card}>
-          <Text style={s.sectionTitle}>Giới thiệu bản thân</Text>
+          <Text style={s.sectionTitle}>{t.profile.aboutTitle}</Text>
           <Text style={s.bioText}>{bio}</Text>
         </View>
       ) : null}
@@ -317,12 +332,12 @@ export default function UserDetailScreen() {
       {/* Tiêu chí & Mức độ tương thích chi tiết */}
       {match?.breakdown && Object.keys(match.breakdown).length > 0 ? (
         <View style={s.card}>
-          <Text style={s.sectionTitle}>Mức độ tương thích chi tiết</Text>
+          <Text style={s.sectionTitle}>{t.profile.compatibilityTitle}</Text>
           <View style={{ marginTop: 10 }}>
             {Object.entries(match.breakdown).map(([k, val]: any) => (
               <MatchBar
                 key={k}
-                label={(CRITERIA_LABELS as any)[k] || k}
+                label={getLocalizedCriteriaLabel(k, language)}
                 value={Number(val)}
               />
             ))}
@@ -332,69 +347,68 @@ export default function UserDetailScreen() {
 
       {/* Nhu cầu tìm phòng & Thông tin sống chung */}
       <View style={s.card}>
-        <Text style={s.sectionTitle}>Thông tin sống chung</Text>
+        <Text style={s.sectionTitle}>{t.profile.livingInfoTitle}</Text>
         <View style={{ marginTop: 6 }}>
-          <InfoRow label="Thành phố" value={city} />
+          <InfoRow label={t.profile.city} value={city} />
           <InfoRow
-            label="Khu vực mong muốn"
+            label={t.profile.preferredLocations}
             value={locations.length ? locations.join(", ") : null}
           />
           <InfoRow
-            label="Ngân sách"
-            value={budget ? formatBudget(budget) : null}
+            label={t.profile.budget}
+            value={budget ? formatBudgetLocalized(budget, language) : null}
           />
 
-          {/* Lịch sinh hoạt */}
           {sched ? (
             <InfoRow
-              label="Lịch sinh hoạt"
-              value={`Ngủ ${sched.sleepTime || "—"} · Dậy ${sched.wakeTime || "—"} (${(PATTERN_LABELS as any)[sched.pattern] || "Tự do"})`}
+              label={t.profile.schedule}
+              value={`${t.profile.sleep} ${sched.sleepTime || "—"} · ${t.profile.wake} ${sched.wakeTime || "—"} (${getLocalizedPatternLabel(sched.pattern, language)})`}
             />
           ) : null}
 
-          {/* Lối sống */}
           {l.cleanliness != null ? (
             <InfoRow
-              label="Sạch sẽ, ngăn nắp"
-              value={`${l.cleanliness}/5 điểm`}
+              label={t.profile.cleanliness}
+              value={`${l.cleanliness}/5 ${t.profile.pointsSuffix}`}
             />
           ) : null}
           {l.noiseLevel != null ? (
             <InfoRow
-              label="Mức độ ồn chấp nhận"
-              value={`${l.noiseLevel}/5 điểm`}
+              label={t.profile.noiseLevel}
+              value={`${l.noiseLevel}/5 ${t.profile.pointsSuffix}`}
             />
           ) : null}
           {l.privacyNeed != null ? (
-            <InfoRow label="Nhu cầu riêng tư" value={`${l.privacyNeed}/5 điểm`} />
+            <InfoRow
+              label={t.profile.privacyNeed}
+              value={`${l.privacyNeed}/5 ${t.profile.pointsSuffix}`}
+            />
           ) : null}
           {l.guestFrequency ? (
             <InfoRow
-              label="Tiếp khách qua đêm"
-              value={(GUEST_LABELS as any)[l.guestFrequency] || l.guestFrequency}
+              label={t.profile.guestFrequency}
+              value={getLocalizedGuestLabel(l.guestFrequency, language)}
             />
           ) : null}
           {l.sharedSpaceUsage ? (
             <InfoRow
-              label="Dùng không gian chung"
-              value={
-                (SHARED_LABELS as any)[l.sharedSpaceUsage] || l.sharedSpaceUsage
-              }
+              label={t.profile.sharedSpaceUsage}
+              value={getLocalizedSharedLabel(l.sharedSpaceUsage, language)}
             />
           ) : null}
           {l.smoking != null ? (
-            <InfoRow label="Hút thuốc" value={yesNo(l.smoking)} />
+            <InfoRow label={t.profile.smoking} value={yesNo(l.smoking)} />
           ) : null}
           {l.pets != null ? (
-            <InfoRow label="Thú cưng" value={yesNo(l.pets)} />
+            <InfoRow label={t.profile.pets} value={yesNo(l.pets)} />
           ) : null}
 
           {interests.length ? (
-            <InfoRow label="Sở thích" value={interests.join(", ")} />
+            <InfoRow label={t.profile.interests} value={interests.join(", ")} />
           ) : null}
           {requirements.length ? (
             <InfoRow
-              label="Yêu cầu khi sống chung"
+              label={t.profile.requirements}
               value={requirements.join(", ")}
             />
           ) : null}
@@ -404,7 +418,7 @@ export default function UserDetailScreen() {
       {/* Ảnh phòng đang ở (nếu có) */}
       {roomPhotos.length > 0 ? (
         <View style={s.card}>
-          <Text style={s.sectionTitle}>Hình ảnh phòng đang ở</Text>
+          <Text style={s.sectionTitle}>{t.profile.roomPhotosTitle}</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -431,12 +445,12 @@ export default function UserDetailScreen() {
               disabled={busyAction}
               onPress={handleOpenChat}
             >
-              <Text style={s.buttonText}>💬 Nhắn tin ngay</Text>
+              <Text style={s.buttonText}>{t.profile.messageNowBtn}</Text>
             </Pressable>
           ) : currentStatus === "sent" ? (
             <View style={s.statusBadge}>
               <Text style={{ color: themeColors.primary, fontWeight: "600" }}>
-                ✓ Đã gửi yêu cầu kết nối
+                {t.profile.requestSentBadge}
               </Text>
             </View>
           ) : currentStatus === "received" ? (
@@ -446,7 +460,7 @@ export default function UserDetailScreen() {
                 disabled={busyAction}
                 onPress={handleConnect}
               >
-                <Text style={s.buttonText}>Chấp nhận kết nối</Text>
+                <Text style={s.buttonText}>{t.profile.acceptConnectionBtn}</Text>
               </Pressable>
             </View>
           ) : (
@@ -464,7 +478,7 @@ export default function UserDetailScreen() {
                 }}
               >
                 <Ionicons name="person-add" size={18} color="#fff" />
-                <Text style={s.buttonText}>Gửi yêu cầu kết nối</Text>
+                <Text style={s.buttonText}>{t.profile.sendConnectBtn}</Text>
               </View>
             </Pressable>
           )}
@@ -506,6 +520,19 @@ const s = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 24,
+  },
+  langBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: "#312e81",
+    borderWidth: 1,
+    borderColor: "#6366f1",
+  },
+  langText: {
+    color: "#f8fafc",
+    fontSize: 12,
+    fontWeight: "700",
   },
   card: {
     backgroundColor: themeColors.card,

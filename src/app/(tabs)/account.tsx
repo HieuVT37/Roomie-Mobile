@@ -2,17 +2,16 @@ import { useRouter } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useAuth } from "../../auth/AuthContext";
 import { Avatar, Loading, LoginPrompt } from "../../components/ui";
+import { useLanguage } from "../../context/LanguageContext";
 import { PLAN_LABELS } from "../../utils/labels";
 
 export default function AccountScreen() {
   const router = useRouter();
   const { user, profile, loading, logout } = useAuth();
+  const { toggleLanguage, t } = useLanguage();
 
-  if (loading) return <Loading text="Đang kiểm tra đăng nhập..." />;
-  if (!user)
-    return (
-      <LoginPrompt text="Đăng nhập để xem thông tin liên hệ, yêu thích tin và nhắn tin." />
-    );
+  if (loading) return <Loading text={t.common.checkingAuth} />;
+  if (!user) return <LoginPrompt text={t.account.loginPrompt} />;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -31,12 +30,12 @@ export default function AccountScreen() {
       {/* Thẻ thông tin tài khoản */}
       <View style={styles.infoCard}>
         <View style={styles.row}>
-          <Text style={styles.rowLabel}>Email</Text>
+          <Text style={styles.rowLabel}>{t.account.email}</Text>
           <Text style={styles.rowValue}>{user.email}</Text>
         </View>
         <View style={styles.divider} />
         <View style={styles.row}>
-          <Text style={styles.rowLabel}>Gói dịch vụ</Text>
+          <Text style={styles.rowLabel}>{t.account.plan}</Text>
           <Text style={[styles.rowValue, styles.highlightValue]}>
             {(PLAN_LABELS as any)[user.currentPlan] ||
               user.currentPlan ||
@@ -45,21 +44,27 @@ export default function AccountScreen() {
         </View>
         <View style={styles.divider} />
         <View style={styles.row}>
-          <Text style={styles.rowLabel}>Quyền chủ trọ</Text>
+          <Text style={styles.rowLabel}>{t.account.landlordRole}</Text>
           <Text style={styles.rowValue}>
-            {user.isLandlord ? "Có" : "Chưa có"}
+            {user.isLandlord ? t.account.hasLandlord : t.account.noLandlord}
           </Text>
         </View>
       </View>
 
       {/* Danh sách các nút chức năng */}
       <View style={{ gap: 12 }}>
+        {/* Nút chuyển đổi ngôn ngữ Việt – Anh */}
+        <Pressable style={styles.menuItem} onPress={toggleLanguage}>
+          <Text style={styles.menuText}>{t.account.languageLabel}</Text>
+          <Text style={styles.langBadge}>{t.account.languageValue}</Text>
+        </Pressable>
+
         {/* Chỉnh sửa hồ sơ */}
         <Pressable
           style={styles.menuItem}
           onPress={() => router.push("/profile/edit" as any)}
         >
-          <Text style={styles.menuText}>✏️ Chỉnh sửa hồ sơ</Text>
+          <Text style={styles.menuText}>{t.account.editProfile}</Text>
           <Text style={styles.arrow}>›</Text>
         </Pressable>
 
@@ -68,7 +73,7 @@ export default function AccountScreen() {
           style={styles.menuItem}
           onPress={() => router.push("/account/subscription" as any)}
         >
-          <Text style={styles.menuText}>💎 Gói dịch vụ</Text>
+          <Text style={styles.menuText}>{t.account.subscription}</Text>
           <Text style={styles.arrow}>›</Text>
         </Pressable>
 
@@ -77,7 +82,7 @@ export default function AccountScreen() {
           style={styles.menuItem}
           onPress={() => router.push("/favorites" as any)}
         >
-          <Text style={styles.menuText}>❤️ Tin đã lưu</Text>
+          <Text style={styles.menuText}>{t.account.savedPosts}</Text>
           <Text style={styles.arrow}>›</Text>
         </Pressable>
 
@@ -86,14 +91,14 @@ export default function AccountScreen() {
           style={styles.menuItem}
           onPress={() => router.push("/account/support" as any)}
         >
-          <Text style={styles.menuText}>🛠️ Trung tâm hỗ trợ</Text>
+          <Text style={styles.menuText}>{t.account.supportCenter}</Text>
           <Text style={styles.arrow}>›</Text>
         </Pressable>
       </View>
 
       {/* Nút Đăng xuất */}
       <Pressable style={styles.logoutBtn} onPress={logout}>
-        <Text style={styles.logoutText}>Đăng xuất</Text>
+        <Text style={styles.logoutText}>{t.account.logout}</Text>
       </Pressable>
     </ScrollView>
   );
@@ -102,7 +107,7 @@ export default function AccountScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0f172a", // Tông nền tím / xanh đen chủ đạo
+    backgroundColor: "#0f172a",
   },
   content: {
     padding: 16,
@@ -138,7 +143,7 @@ const styles = StyleSheet.create({
     color: "#f8fafc",
   },
   highlightValue: {
-    color: "#6366f1", // Màu tím nổi bật cho tên gói
+    color: "#6366f1",
     fontWeight: "700",
   },
   divider: {
@@ -160,12 +165,21 @@ const styles = StyleSheet.create({
     color: "#f8fafc",
     fontWeight: "500",
   },
+  langBadge: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#818cf8",
+    backgroundColor: "#312e81",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
   arrow: {
     color: "#64748b",
     fontSize: 18,
   },
   logoutBtn: {
-    backgroundColor: "#4f46e5", // Nút đăng xuất tông tím nổi bật
+    backgroundColor: "#4f46e5",
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: "center",

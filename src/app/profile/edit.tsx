@@ -14,10 +14,13 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
-import api from "../../api/axios";
+import api, { imageUrl } from "../../api/axios";
+import { useAuth } from "../../auth/AuthContext";
+import { uploadImageToFirebase } from "../../firebase/storage";
 
 export default function EditProfileScreen() {
   const router = useRouter();
+  const { refreshProfile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -180,13 +183,28 @@ export default function EditProfileScreen() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Xử lý Lưu hồ sơ
+  // Xử lý Lưu hồ sơ: Tải ảnh đại diện & ảnh phòng lên Firebase Storage -> Lưu link https qua PUT /profiles/me
   const handleSave = async () => {
     try {
       setSaving(true);
+      let finalAvatarUrl = avatarUrl;
+      if (avatarUrl && !avatarUrl.startsWith("http")) {
+        finalAvatarUrl = await uploadImageToFirebase(avatarUrl, "avatars");
+        setAvatarUrl(finalAvatarUrl);
+      }
+
+      const finalRoomImages = await Promise.all(
+        roomImages.map((imgUri) =>
+          imgUri && !imgUri.startsWith("http")
+            ? uploadImageToFirebase(imgUri, "rooms")
+            : Promise.resolve(imgUri),
+        ),
+      );
+      setRoomImages(finalRoomImages);
+
       const payload = {
         displayName,
-        avatarUrl,
+        avatarUrl: finalAvatarUrl,
         bio,
         gender,
         birthYear: birthYear ? Number(birthYear) : null,
@@ -200,7 +218,7 @@ export default function EditProfileScreen() {
           .filter(Boolean),
         minBudget: minBudget ? Number(minBudget) : 0,
         maxBudget: maxBudget ? Number(maxBudget) : 0,
-        roomImages,
+        roomImages: finalRoomImages,
         sleepTime,
         wakeTime,
         scheduleType,
@@ -221,6 +239,7 @@ export default function EditProfileScreen() {
       };
 
       await api.put("/profiles/me", payload);
+      await refreshProfile(); // cập nhật avatar ở tab Tài khoản ngay, không cần mở lại app
 
       Alert.alert("Thành công", "Đã cập nhật hồ sơ cá nhân!");
       router.back();
@@ -270,7 +289,7 @@ export default function EditProfileScreen() {
           <View style={styles.avatarPickerRow}>
             {avatarUrl ? (
               <Image
-                source={{ uri: avatarUrl }}
+                source={{ uri: (imageUrl(avatarUrl) || avatarUrl) as string }}
                 style={styles.avatarPreviewLarge}
               />
             ) : (

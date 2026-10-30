@@ -18,7 +18,11 @@
         "foregroundImage": "./assets/images/roomie-logo.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.roomie.mobile"
+      "googleServicesFile": "./google-services.json",
+      "package": "com.roomie.mobile",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -40,11 +44,25 @@
         {
           "photosPermission": "Cho phép Roomie truy cập ảnh để gửi trong tin nhắn."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/roomie-logo.png",
+          "color": "#6366f1"
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "7f9b40c0-7889-49e1-bc1d-0fb4a2d93cbc"
+      }
+    },
+    "owner": "anhhvhe"
   }
 }
