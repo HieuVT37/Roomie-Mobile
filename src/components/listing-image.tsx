@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Image,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  type StyleProp,
-  type ViewStyle,
+    ActivityIndicator,
+    Image,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
+    type StyleProp,
+    type ViewStyle,
 } from "react-native";
 import { imageUrl } from "../api/axios";
 
@@ -52,6 +52,15 @@ function ImageContent({ uri }: { uri: string }) {
 
   return (
     <>
+      {/* Background blurred image */}
+      <Image
+        key={`blur-${attempt}`}
+        source={{ uri }}
+        style={StyleSheet.absoluteFill}
+        resizeMode="cover"
+        blurRadius={20}
+      />
+      {/* Foreground sharp image */}
       <Image
         key={attempt}
         source={{ uri }}

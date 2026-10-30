@@ -1,36 +1,17 @@
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { imageUrl } from "../api/axios";
 import {
-  LISTING_STATUS_LABELS,
-  MODERATION_LABELS,
-  PASS_TYPE_LABELS,
-  ROOM_TYPE_LABELS,
-  formatVND,
-  passPriceText,
+    LISTING_STATUS_LABELS,
+    MODERATION_LABELS,
+    PASS_TYPE_LABELS,
+    ROOM_TYPE_LABELS,
+    formatVND,
+    passPriceText,
 } from "../utils/labels";
+import { ListingImage } from "./listing-image";
 import { colors, shared } from "./ui";
 import { ListingImage } from "./listing-image";
-
-function useImageAspectHeight(uri: string | undefined, containerWidth: number, fallback = 220) {
-  const [height, setHeight] = useState(fallback);
-  useEffect(() => {
-    if (!uri) return;
-    let active = true;
-    Image.getSize(
-      uri,
-      (width, imageHeight) => {
-        if (active && width > 0) setHeight(Math.round((imageHeight / width) * containerWidth));
-      },
-      () => active && setHeight(fallback),
-    );
-    return () => {
-      active = false;
-    };
-  }, [uri, containerWidth, fallback]);
-  return height;
-}
 
 // 1. CARD PHÒNG TRỌ (Accommodation)
 export function AccommodationCard({ item, showStatus = false }: { item: any; showStatus?: boolean }) {
@@ -92,9 +73,11 @@ export function PassCard({ item }: { item: any }) {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
   const cardWidth = screenWidth - 24;
+  
+  // Tỉ lệ 3:4 - chiều cao = 3, chiều rộng = 4
+  const imgHeight = Math.round((cardWidth * 3) / 4);
+  
   const firstImage = item.images?.[0] ? (imageUrl(item.images[0]) as string) : undefined;
-  const imgHeight = useImageAspectHeight(firstImage, cardWidth);
-
   const id = item.id || item._id;
 
   return (
@@ -105,13 +88,23 @@ export function PassCard({ item }: { item: any }) {
       }
     >
       {firstImage ? (
-        <Image
-          source={{ uri: firstImage }}
-          style={{ width: "100%", height: imgHeight, backgroundColor: "#334155" }}
-          resizeMode="contain"
-        />
+        <View style={{ width: "100%", height: imgHeight, overflow: "hidden" }}>
+          {/* Background blurred image */}
+          <Image
+            source={{ uri: firstImage }}
+            style={{ position: "absolute", width: "100%", height: "100%" }}
+            resizeMode="cover"
+            blurRadius={20}
+          />
+          {/* Foreground sharp image */}
+          <Image
+            source={{ uri: firstImage }}
+            style={{ width: "100%", height: imgHeight }}
+            resizeMode="contain"
+          />
+        </View>
       ) : (
-        <View style={[{ width: "100%", height: 180, backgroundColor: "#334155" }, s.coverEmpty]}>
+        <View style={[{ width: "100%", height: imgHeight, backgroundColor: "#1e293b" }, s.coverEmpty]}>
           <Text style={{ fontSize: 40 }}>📦</Text>
         </View>
       )}
