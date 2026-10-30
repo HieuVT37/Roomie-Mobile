@@ -6,6 +6,7 @@ import {
   Alert,
   FlatList,
   Image,
+  Keyboard,
   Pressable,
   StyleSheet,
   Text,
@@ -39,6 +40,22 @@ const themeColors = {
   primary: "#6366f1",
   danger: "#ef4444",
 };
+
+// Chặn các thao tác mạng có thể treo vô hạn (Storage / Firestore khi mất mạng hoặc bị rules chặn)
+const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("timeout")), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
 
 const hhmm = (iso: string) => {
   const d = new Date(iso);
@@ -126,6 +143,7 @@ export default function ChatScreen() {
   );
 
   const pickImages = async () => {
+    Keyboard.dismiss();
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsMultipleSelection: true,
@@ -146,9 +164,9 @@ export default function ChatScreen() {
       let firebaseImageUrls: string[] = [];
       if (picked.length > 0 && isFirebaseConfigured) {
         try {
-          firebaseImageUrls = await uploadMultipleImagesToFirebase(
-            picked,
-            `chat/${id}`,
+          firebaseImageUrls = await withTimeout(
+            uploadMultipleImagesToFirebase(picked, `chat/${id}`),
+            20000,
           );
         } catch {}
       }
@@ -168,7 +186,8 @@ export default function ChatScreen() {
 
       // Ghi đồng thời vào Firestore để cập nhật realtime tức thì
       if (isFirebaseConfigured && user) {
-        await sendFirestoreMessage(id, {
+        // KHÔNG await: setDoc có thể treo vô hạn (offline / rules chặn) và làm nút Gửi bị kẹt ở trạng thái "..."
+        sendFirestoreMessage(id, {
           senderId: user.id || user._id,
           senderName: profile?.displayName || user.email || "Roomie",
           text: body,

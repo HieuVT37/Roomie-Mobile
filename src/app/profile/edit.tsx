@@ -18,6 +18,21 @@ import api, { imageUrl } from "../../api/axios";
 import { useAuth } from "../../auth/AuthContext";
 import { uploadImageToFirebase } from "../../firebase/storage";
 
+const GENDER_OPTIONS = [
+  { value: "male", label: "Nam" },
+  { value: "female", label: "Nữ" },
+  { value: "other", label: "Khác" },
+] as const;
+
+// Backend chỉ nhận male / female / other. Chuẩn hóa cả dữ liệu cũ (vd. "Nam", "Nữ", "Khác")
+const normalizeGender = (raw: any): "" | "male" | "female" | "other" => {
+  const v = String(raw || "").trim().toLowerCase();
+  if (["male", "nam"].includes(v)) return "male";
+  if (["female", "nữ", "nu"].includes(v)) return "female";
+  if (["other", "khác", "khac"].includes(v)) return "other";
+  return "";
+};
+
 export default function EditProfileScreen() {
   const router = useRouter();
   const { refreshProfile } = useAuth();
@@ -28,7 +43,7 @@ export default function EditProfileScreen() {
   const [displayName, setDisplayName] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [bio, setBio] = useState("");
-  const [gender, setGender] = useState("Nam");
+  const [gender, setGender] = useState<"" | "male" | "female" | "other">("");
   const [birthYear, setBirthYear] = useState("");
   const [school, setSchool] = useState("");
   const [occupation, setOccupation] = useState("");
@@ -135,7 +150,7 @@ export default function EditProfileScreen() {
           setDisplayName(data.displayName || "");
           setAvatarUrl(data.avatarUrl || "");
           setBio(data.bio || "");
-          setGender(data.gender || "Nam");
+          setGender(normalizeGender(data.gender));
           setBirthYear(data.birthYear ? String(data.birthYear) : "");
           setSchool(data.school || "");
           setOccupation(data.occupation || "");
@@ -206,7 +221,7 @@ export default function EditProfileScreen() {
         displayName,
         avatarUrl: finalAvatarUrl,
         bio,
-        gender,
+        ...(gender ? { gender } : {}),
         birthYear: birthYear ? Number(birthYear) : null,
         school,
         occupation,
@@ -331,12 +346,25 @@ export default function EditProfileScreen() {
         <View style={styles.rowGroup}>
           <View style={[styles.inputGroup, { flex: 1 }]}>
             <Text style={styles.label}>Giới tính</Text>
-            <TextInput
-              style={styles.input}
-              value={gender}
-              onChangeText={setGender}
-              placeholderTextColor="#64748b"
-            />
+            <View style={styles.genderRow}>
+              {GENDER_OPTIONS.map((opt) => {
+                const active = gender === opt.value;
+                return (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[styles.genderChip, active && styles.genderChipActive]}
+                    onPress={() => setGender(opt.value)}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[styles.genderText, active && styles.genderTextActive]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
           <View style={[styles.inputGroup, { flex: 1 }]}>
             <Text style={styles.label}>Năm sinh</Text>
@@ -735,6 +763,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   textArea: { height: 80, textAlignVertical: "top" },
+  genderRow: { flexDirection: "row", gap: 6 },
+  genderChip: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#334155",
+    backgroundColor: "#0f172a",
+    alignItems: "center",
+  },
+  genderChipActive: { backgroundColor: "#4f46e5", borderColor: "#6366f1" },
+  genderText: { color: "#94a3b8", fontSize: 14, fontWeight: "600" },
+  genderTextActive: { color: "#ffffff" },
   avatarPickerRow: {
     flexDirection: "row",
     alignItems: "center",
