@@ -520,7 +520,7 @@ function EditPassModal({
   // Validation errors
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Validate form
+  // Validate form - validation đầy đủ
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
@@ -534,22 +534,53 @@ function EditPassModal({
         newErrors.title = "Tiêu đề không được quá 100 ký tự";
       }
 
+      if (!description.trim()) {
+        newErrors.description = "Vui lòng nhập mô tả phòng";
+      }
+
+      if (!price.trim()) {
+        newErrors.price = "Vui lòng nhập giá thuê";
+      } else if (isNaN(Number(price))) {
+        newErrors.price = "Giá thuê phải là số";
+      } else {
+        const priceNum = Number(price);
+        if (!Number.isInteger(priceNum)) {
+          newErrors.price = "Giá thuê phải là số nguyên";
+        } else if (priceNum <= 0) {
+          newErrors.price = "Giá thuê phải lớn hơn 0";
+        } else if (priceNum > 100000000) {
+          newErrors.price = "Giá thuê không hợp lệ (quá 100 triệu)";
+        }
+      }
+
+      if (!area.trim()) {
+        newErrors.area = "Vui lòng nhập khu vực";
+      }
+
+      if (!contact.trim()) {
+        newErrors.contact = "Vui lòng nhập số điện thoại liên hệ";
+      } else {
+        const phone = contact.trim().replace(/[\s\-]/g, "");
+        if (!/^0\d{9}$/.test(phone)) {
+          newErrors.contact = "Số điện thoại phải gồm 10 số và bắt đầu bằng 0";
+        }
+      }
+
       if (!address.trim()) {
-        newErrors.address = "Vui lòng nhập địa chỉ phòng";
+        newErrors.address = "Vui lòng nhập địa chỉ chi tiết phòng";
       }
 
-      if (price && isNaN(Number(price))) {
-        newErrors.price = "Giá phải là số";
-      } else if (price && Number(price) < 0) {
-        newErrors.price = "Giá không được âm";
-      } else if (price && Number(price) > 100000000) {
-        newErrors.price = "Giá không hợp lệ (quá 100 triệu)";
-      }
-
-      if (deposit && isNaN(Number(deposit))) {
+      if (!deposit.trim()) {
+        newErrors.deposit = "Vui lòng nhập tiền cọc";
+      } else if (isNaN(Number(deposit))) {
         newErrors.deposit = "Tiền cọc phải là số";
-      } else if (deposit && Number(deposit) < 0) {
-        newErrors.deposit = "Tiền cọc không được âm";
+      } else {
+        const depositNum = Number(deposit);
+        if (!Number.isInteger(depositNum)) {
+          newErrors.deposit = "Tiền cọc phải là số nguyên";
+        } else if (depositNum <= 0) {
+          newErrors.deposit = "Tiền cọc phải lớn hơn 0";
+        }
       }
 
       const leaseMonths = remainingLeaseMonths.trim();
@@ -557,8 +588,27 @@ function EditPassModal({
         newErrors.remainingLeaseMonths = "Vui lòng nhập số tháng hợp đồng còn lại";
       } else if (isNaN(Number(leaseMonths))) {
         newErrors.remainingLeaseMonths = "Số tháng phải là số";
-      } else if (Number(leaseMonths) < 0 || Number(leaseMonths) > 120) {
-        newErrors.remainingLeaseMonths = "Số tháng phải từ 0 đến 120";
+      } else {
+        const monthsNum = Number(leaseMonths);
+        if (!Number.isInteger(monthsNum)) {
+          newErrors.remainingLeaseMonths = "Số tháng phải là số nguyên";
+        } else if (monthsNum <= 0) {
+          newErrors.remainingLeaseMonths = "Số tháng phải lớn hơn 0";
+        } else if (monthsNum > 120) {
+          newErrors.remainingLeaseMonths = "Số tháng không được quá 120";
+        }
+      }
+
+      if (!availableFrom.trim()) {
+        newErrors.availableFrom = "Vui lòng chọn ngày bàn giao";
+      }
+
+      if (!transferTerms.trim()) {
+        newErrors.transferTerms = "Vui lòng nhập điều khoản chuyển nhượng";
+      }
+
+      if (images.length + newImageAssets.length === 0) {
+        newErrors.images = "Vui lòng thêm ít nhất 1 hình ảnh phòng";
       }
 
     } else {
@@ -571,14 +621,42 @@ function EditPassModal({
         newErrors.title = "Tên món đồ không được quá 100 ký tự";
       }
 
+      if (!description.trim()) {
+        newErrors.description = "Vui lòng nhập mô tả món đồ";
+      }
+
       if (dealType !== "give_away") {
-        if (price && isNaN(Number(price))) {
-          newErrors.price = "Giá phải là số";
-        } else if (price && Number(price) < 0) {
-          newErrors.price = "Giá không được âm";
-        } else if (price && Number(price) > 100000000) {
-          newErrors.price = "Giá không hợp lệ (quá 100 triệu)";
+        if (!price.trim()) {
+          newErrors.price = "Vui lòng nhập giá bán";
+        } else if (isNaN(Number(price))) {
+          newErrors.price = "Giá bán phải là số";
+        } else {
+          const priceNum = Number(price);
+          if (!Number.isInteger(priceNum)) {
+            newErrors.price = "Giá bán phải là số nguyên";
+          } else if (priceNum <= 0) {
+            newErrors.price = "Giá bán phải lớn hơn 0";
+          } else if (priceNum > 100000000) {
+            newErrors.price = "Giá bán không hợp lệ (quá 100 triệu)";
+          }
         }
+      }
+
+      if (!area.trim()) {
+        newErrors.area = "Vui lòng nhập khu vực";
+      }
+
+      if (!contact.trim()) {
+        newErrors.contact = "Vui lòng nhập số điện thoại liên hệ";
+      } else {
+        const phone = contact.trim().replace(/[\s\-]/g, "");
+        if (!/^0\d{9}$/.test(phone)) {
+          newErrors.contact = "Số điện thoại phải gồm 10 số và bắt đầu bằng 0";
+        }
+      }
+
+      if (images.length + newImageAssets.length === 0) {
+        newErrors.images = "Vui lòng thêm ít nhất 1 hình ảnh món đồ";
       }
     }
 

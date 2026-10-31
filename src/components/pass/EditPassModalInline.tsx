@@ -74,6 +74,9 @@ export function EditPassModalInline({
   const item = initialListing.itemInfo || {};
   const scrollRef = useRef<ScrollView | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  
+  // Lưu vị trí Y của các trường để scroll đến trường có lỗi
+  const fieldPositions = useRef<Record<string, number>>({});
 
   const [title, setTitle] = useState(initialListing.title || "");
   const [description, setDescription] = useState(initialListing.description || "");
@@ -125,33 +128,143 @@ export function EditPassModalInline({
   // Validation errors
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Validate form
+  // Validate form - validation đầy đủ giống form tạo mới
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
     if (isRoom) {
-      if (!title.trim() || title.trim().length < 10 || title.trim().length > 100) {
-        newErrors.title = "Tiêu đề phải từ 10-100 ký tự";
+      // Validate Pass Phòng
+      if (!title.trim()) {
+        newErrors.title = "Vui lòng nhập tiêu đề";
+      } else if (title.trim().length < 10) {
+        newErrors.title = "Tiêu đề phải có ít nhất 10 ký tự";
+      } else if (title.trim().length > 100) {
+        newErrors.title = "Tiêu đề không được quá 100 ký tự";
       }
-      if (!address.trim()) newErrors.address = "Vui lòng nhập địa chỉ phòng";
-      if (price && (isNaN(Number(price)) || Number(price) < 0 || Number(price) > 100000000)) {
-        newErrors.price = "Giá không hợp lệ";
+
+      if (!description.trim()) {
+        newErrors.description = "Vui lòng nhập mô tả phòng";
       }
-      if (deposit && (isNaN(Number(deposit)) || Number(deposit) < 0)) {
-        newErrors.deposit = "Tiền cọc không hợp lệ";
-      }
-      const leaseMonths = remainingLeaseMonths.trim();
-      if (!leaseMonths || isNaN(Number(leaseMonths)) || Number(leaseMonths) < 0 || Number(leaseMonths) > 120) {
-        newErrors.remainingLeaseMonths = "Số tháng phải từ 0-120";
-      }
-    } else {
-      if (!title.trim() || title.trim().length < 5 || title.trim().length > 100) {
-        newErrors.title = "Tên món đồ phải từ 5-100 ký tự";
-      }
-      if (dealType !== "give_away") {
-        if (price && (isNaN(Number(price)) || Number(price) < 0 || Number(price) > 100000000)) {
-          newErrors.price = "Giá không hợp lệ";
+
+      if (!price.trim()) {
+        newErrors.price = "Vui lòng nhập giá thuê";
+      } else if (isNaN(Number(price))) {
+        newErrors.price = "Giá thuê phải là số";
+      } else {
+        const priceNum = Number(price);
+        if (!Number.isInteger(priceNum)) {
+          newErrors.price = "Giá thuê phải là số nguyên";
+        } else if (priceNum <= 0) {
+          newErrors.price = "Giá thuê phải lớn hơn 0";
+        } else if (priceNum > 100000000) {
+          newErrors.price = "Giá thuê không hợp lệ (quá 100 triệu)";
         }
+      }
+
+      if (!area.trim()) {
+        newErrors.area = "Vui lòng nhập khu vực";
+      }
+
+      if (!contact.trim()) {
+        newErrors.contact = "Vui lòng nhập số điện thoại liên hệ";
+      } else {
+        const phone = contact.trim().replace(/[\s\-]/g, "");
+        if (!/^0\d{9}$/.test(phone)) {
+          newErrors.contact = "Số điện thoại phải gồm 10 số và bắt đầu bằng 0";
+        }
+      }
+
+      if (!address.trim()) {
+        newErrors.address = "Vui lòng nhập địa chỉ chi tiết phòng";
+      }
+
+      if (!deposit.trim()) {
+        newErrors.deposit = "Vui lòng nhập tiền cọc";
+      } else if (isNaN(Number(deposit))) {
+        newErrors.deposit = "Tiền cọc phải là số";
+      } else {
+        const depositNum = Number(deposit);
+        if (!Number.isInteger(depositNum)) {
+          newErrors.deposit = "Tiền cọc phải là số nguyên";
+        } else if (depositNum <= 0) {
+          newErrors.deposit = "Tiền cọc phải lớn hơn 0";
+        }
+      }
+
+      const leaseMonths = remainingLeaseMonths.trim();
+      if (!leaseMonths) {
+        newErrors.remainingLeaseMonths = "Vui lòng nhập số tháng hợp đồng còn lại";
+      } else if (isNaN(Number(leaseMonths))) {
+        newErrors.remainingLeaseMonths = "Số tháng phải là số";
+      } else {
+        const monthsNum = Number(leaseMonths);
+        if (!Number.isInteger(monthsNum)) {
+          newErrors.remainingLeaseMonths = "Số tháng phải là số nguyên";
+        } else if (monthsNum <= 0) {
+          newErrors.remainingLeaseMonths = "Số tháng phải lớn hơn 0";
+        } else if (monthsNum > 120) {
+          newErrors.remainingLeaseMonths = "Số tháng không được quá 120";
+        }
+      }
+
+      if (!availableFrom.trim()) {
+        newErrors.availableFrom = "Vui lòng chọn ngày bàn giao";
+      }
+
+      if (!transferTerms.trim()) {
+        newErrors.transferTerms = "Vui lòng nhập điều khoản chuyển nhượng";
+      }
+
+      if (images.length + newImageAssets.length === 0) {
+        newErrors.images = "Vui lòng thêm ít nhất 1 hình ảnh phòng";
+      }
+
+    } else {
+      // Validate Pass Đồ
+      if (!title.trim()) {
+        newErrors.title = "Vui lòng nhập tên món đồ";
+      } else if (title.trim().length < 5) {
+        newErrors.title = "Tên món đồ phải có ít nhất 5 ký tự";
+      } else if (title.trim().length > 100) {
+        newErrors.title = "Tên món đồ không được quá 100 ký tự";
+      }
+
+      if (!description.trim()) {
+        newErrors.description = "Vui lòng nhập mô tả món đồ";
+      }
+
+      if (dealType !== "give_away") {
+        if (!price.trim()) {
+          newErrors.price = "Vui lòng nhập giá bán";
+        } else if (isNaN(Number(price))) {
+          newErrors.price = "Giá bán phải là số";
+        } else {
+          const priceNum = Number(price);
+          if (!Number.isInteger(priceNum)) {
+            newErrors.price = "Giá bán phải là số nguyên";
+          } else if (priceNum <= 0) {
+            newErrors.price = "Giá bán phải lớn hơn 0";
+          } else if (priceNum > 100000000) {
+            newErrors.price = "Giá bán không hợp lệ (quá 100 triệu)";
+          }
+        }
+      }
+
+      if (!area.trim()) {
+        newErrors.area = "Vui lòng nhập khu vực";
+      }
+
+      if (!contact.trim()) {
+        newErrors.contact = "Vui lòng nhập số điện thoại liên hệ";
+      } else {
+        const phone = contact.trim().replace(/[\s\-]/g, "");
+        if (!/^0\d{9}$/.test(phone)) {
+          newErrors.contact = "Số điện thoại phải gồm 10 số và bắt đầu bằng 0";
+        }
+      }
+
+      if (images.length + newImageAssets.length === 0) {
+        newErrors.images = "Vui lòng thêm ít nhất 1 hình ảnh món đồ";
       }
     }
 
@@ -160,10 +273,23 @@ export function EditPassModalInline({
   };
 
   const scrollToError = () => {
-    if (scrollRef.current) {
-      // @ts-ignore
-      scrollRef.current.scrollTo({ y: 0, animated: true });
-    }
+    if (!scrollRef.current) return;
+    
+    const errorFields = Object.keys(errors);
+    if (errorFields.length === 0) return;
+    
+    const firstErrorField = errorFields[0];
+    
+    setTimeout(() => {
+      const yPosition = fieldPositions.current[firstErrorField];
+      if (yPosition !== undefined && yPosition > 0) {
+        // @ts-ignore
+        scrollRef.current?.scrollTo({ y: Math.max(0, yPosition - 100), animated: true });
+      } else {
+        // @ts-ignore
+        scrollRef.current?.scrollTo({ y: 0, animated: true });
+      }
+    }, 100);
   };
 
   const ErrorText = ({ field }: { field: string }) => {
@@ -313,90 +439,126 @@ export function EditPassModalInline({
           {/* Thông tin chính */}
           <View style={s.card}>
             <Text style={s.cardTitle}>Thông tin chính</Text>
-            <Text style={s.label}>Tiêu đề *</Text>
-            <TextInput
-              style={[s.input, errors.title && { borderColor: themeColors.danger, borderWidth: 1 }]}
-              value={title}
-              onChangeText={setTitle}
-              placeholder="Tiêu đề bài đăng..."
-              placeholderTextColor="#64748b"
-            />
-            <ErrorText field="title" />
+            
+            <View onLayout={(e) => (fieldPositions.current.title = e.nativeEvent.layout.y)}>
+              <Text style={s.label}>Tiêu đề *</Text>
+              <TextInput
+                style={[s.input, errors.title && { borderColor: themeColors.danger, borderWidth: 1 }]}
+                value={title}
+                onChangeText={setTitle}
+                placeholder="Tiêu đề bài đăng..."
+                placeholderTextColor="#64748b"
+              />
+              <ErrorText field="title" />
+            </View>
 
-            <Text style={s.label}>Mô tả</Text>
-            <TextInput
-              style={[s.input, { height: 90, textAlignVertical: "top" }]}
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Mô tả chi tiết..."
-              placeholderTextColor="#64748b"
-              multiline
-            />
+            <View onLayout={(e) => (fieldPositions.current.description = e.nativeEvent.layout.y)}>
+              <Text style={s.label}>Mô tả *</Text>
+              <TextInput
+                style={[s.input, { height: 90, textAlignVertical: "top" }, errors.description && { borderColor: themeColors.danger, borderWidth: 1 }]}
+                value={description}
+                onChangeText={setDescription}
+                placeholder="Mô tả chi tiết..."
+                placeholderTextColor="#64748b"
+                multiline
+              />
+              <ErrorText field="description" />
+            </View>
 
-            <Text style={s.label}>{isRoom ? "Giá thuê (VNĐ/tháng)" : "Giá (VNĐ)"}</Text>
-            <TextInput
-              style={[s.input, errors.price && { borderColor: themeColors.danger, borderWidth: 1 }]}
-              value={price}
-              onChangeText={setPrice}
-              keyboardType="numeric"
-              editable={isRoom || dealType !== "give_away"}
-            />
-            <ErrorText field="price" />
+            <View onLayout={(e) => (fieldPositions.current.price = e.nativeEvent.layout.y)}>
+              <Text style={s.label}>{isRoom ? "Giá thuê (VNĐ/tháng) *" : "Giá (VNĐ) *"}</Text>
+              <TextInput
+                style={[s.input, errors.price && { borderColor: themeColors.danger, borderWidth: 1 }]}
+                value={price}
+                onChangeText={setPrice}
+                keyboardType="numeric"
+                editable={isRoom || dealType !== "give_away"}
+              />
+              <ErrorText field="price" />
+            </View>
 
-            <Text style={s.label}>Khu vực</Text>
-            <TextInput
-              style={s.input}
-              value={area}
-              onChangeText={setArea}
-              placeholder="Cầu Giấy, Hà Nội..."
-              placeholderTextColor="#64748b"
-            />
+            <View onLayout={(e) => (fieldPositions.current.area = e.nativeEvent.layout.y)}>
+              <Text style={s.label}>Khu vực *</Text>
+              <TextInput
+                style={[s.input, errors.area && { borderColor: themeColors.danger, borderWidth: 1 }]}
+                value={area}
+                onChangeText={setArea}
+                placeholder="Cầu Giấy, Hà Nội..."
+                placeholderTextColor="#64748b"
+              />
+              <ErrorText field="area" />
+            </View>
 
-            <Text style={s.label}>Số điện thoại</Text>
-            <TextInput
-              style={s.input}
-              value={contact}
-              onChangeText={setContact}
-              placeholder="SĐT / Zalo"
-              placeholderTextColor="#64748b"
-            />
+            <View onLayout={(e) => (fieldPositions.current.contact = e.nativeEvent.layout.y)}>
+              <Text style={s.label}>Số điện thoại *</Text>
+              <TextInput
+                style={[s.input, errors.contact && { borderColor: themeColors.danger, borderWidth: 1 }]}
+                value={contact}
+                onChangeText={setContact}
+                placeholder="SĐT / Zalo"
+                placeholderTextColor="#64748b"
+                keyboardType="phone-pad"
+              />
+              <ErrorText field="contact" />
+            </View>
           </View>
 
           {/* Room specific fields */}
           {isRoom && (
             <View style={s.card}>
               <Text style={s.cardTitle}>Thông tin phòng</Text>
-              <Text style={s.label}>Địa chỉ phòng *</Text>
-              <TextInput
-                style={[s.input, errors.address && { borderColor: themeColors.danger, borderWidth: 1 }]}
-                value={address}
-                onChangeText={setAddress}
-              />
-              <ErrorText field="address" />
+              
+              <View onLayout={(e) => (fieldPositions.current.address = e.nativeEvent.layout.y)}>
+                <Text style={s.label}>Địa chỉ phòng *</Text>
+                <TextInput
+                  style={[s.input, errors.address && { borderColor: themeColors.danger, borderWidth: 1 }]}
+                  value={address}
+                  onChangeText={setAddress}
+                  placeholder="Số nhà, đường..."
+                  placeholderTextColor="#64748b"
+                />
+                <ErrorText field="address" />
+              </View>
 
-              <Text style={s.label}>Tiền cọc (VNĐ)</Text>
-              <TextInput
-                style={s.input}
-                value={deposit}
-                onChangeText={setDeposit}
-                keyboardType="numeric"
-              />
+              <View onLayout={(e) => (fieldPositions.current.deposit = e.nativeEvent.layout.y)}>
+                <Text style={s.label}>Tiền cọc (VNĐ) *</Text>
+                <TextInput
+                  style={[s.input, errors.deposit && { borderColor: themeColors.danger, borderWidth: 1 }]}
+                  value={deposit}
+                  onChangeText={setDeposit}
+                  keyboardType="numeric"
+                  placeholder="VD: 3000000"
+                  placeholderTextColor="#64748b"
+                />
+                <ErrorText field="deposit" />
+              </View>
 
-              <Text style={s.label}>Số tháng hợp đồng còn lại *</Text>
-              <TextInput
-                style={[s.input, errors.remainingLeaseMonths && { borderColor: themeColors.danger, borderWidth: 1 }]}
-                value={remainingLeaseMonths}
-                onChangeText={setRemainingLeaseMonths}
-                keyboardType="numeric"
-              />
-              <ErrorText field="remainingLeaseMonths" />
+              <View onLayout={(e) => (fieldPositions.current.remainingLeaseMonths = e.nativeEvent.layout.y)}>
+                <Text style={s.label}>Số tháng hợp đồng còn lại *</Text>
+                <TextInput
+                  style={[s.input, errors.remainingLeaseMonths && { borderColor: themeColors.danger, borderWidth: 1 }]}
+                  value={remainingLeaseMonths}
+                  onChangeText={setRemainingLeaseMonths}
+                  keyboardType="numeric"
+                  placeholder="VD: 6"
+                  placeholderTextColor="#64748b"
+                />
+                <ErrorText field="remainingLeaseMonths" />
+              </View>
 
-              <Text style={s.label}>Bàn giao từ ngày</Text>
-              <Pressable style={s.input} onPress={() => setShowDatePicker(true)}>
-                <Text style={{ color: availableFrom ? themeColors.text : themeColors.muted }}>
-                  {availableFrom || "Chọn ngày"}
-                </Text>
-              </Pressable>
+              <View onLayout={(e) => (fieldPositions.current.availableFrom = e.nativeEvent.layout.y)}>
+                <Text style={s.label}>Bàn giao từ ngày *</Text>
+                <Pressable 
+                  style={[s.input, errors.availableFrom && { borderColor: themeColors.danger, borderWidth: 1 }]} 
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <Text style={{ color: availableFrom ? themeColors.text : themeColors.muted }}>
+                    {availableFrom ? new Date(availableFrom).toLocaleDateString("vi-VN") : "Chọn ngày"}
+                  </Text>
+                </Pressable>
+                <ErrorText field="availableFrom" />
+              </View>
+              
               {showDatePicker && (
                 <DateTimePicker
                   value={availableFrom ? new Date(availableFrom) : new Date()}
@@ -420,13 +582,18 @@ export function EditPassModalInline({
                 <Text style={{ color: themeColors.text, marginLeft: 12 }}>Chủ nhà đồng ý</Text>
               </View>
 
-              <Text style={s.label}>Điều khoản chuyển nhượng</Text>
-              <TextInput
-                style={[s.input, { height: 70, textAlignVertical: "top" }]}
-                value={transferTerms}
-                onChangeText={setTransferTerms}
-                multiline
-              />
+              <View onLayout={(e) => (fieldPositions.current.transferTerms = e.nativeEvent.layout.y)}>
+                <Text style={s.label}>Điều khoản chuyển nhượng *</Text>
+                <TextInput
+                  style={[s.input, { height: 70, textAlignVertical: "top" }, errors.transferTerms && { borderColor: themeColors.danger, borderWidth: 1 }]}
+                  value={transferTerms}
+                  onChangeText={setTransferTerms}
+                  multiline
+                  placeholder="VD: Bên nhận chuyển lại tiền cọc..."
+                  placeholderTextColor="#64748b"
+                />
+                <ErrorText field="transferTerms" />
+              </View>
             </View>
           )}
 
@@ -482,8 +649,9 @@ export function EditPassModalInline({
           )}
 
           {/* Images */}
-          <View style={s.card}>
-            <Text style={s.cardTitle}>Hình ảnh ({images.length + newImageAssets.length}/8)</Text>
+          <View style={s.card} onLayout={(e) => (fieldPositions.current.images = e.nativeEvent.layout.y)}>
+            <Text style={s.cardTitle}>Hình ảnh ({images.length + newImageAssets.length}/8) *</Text>
+            <ErrorText field="images" />
             <Pressable style={s.addImageBtn} onPress={pickMoreImages}>
               <Text style={s.addImageBtnText}>+ Thêm ảnh</Text>
             </Pressable>

@@ -462,6 +462,9 @@ function CreatePassForm({
   const [type, setType] = useState<"item" | "room">("room");
   const scrollRef = useRef<ScrollView | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  
+  // Lưu vị trí Y của các trường để scroll đến trường có lỗi
+  const fieldPositions = useRef<Record<string, number>>({});
 
   // State riêng biệt cho Pass phòng
   const [roomForm, setRoomForm] = useState({
@@ -674,11 +677,26 @@ function CreatePassForm({
     return Object.keys(newErrors).length === 0;
   };
 
-  // Scroll to first error
+  // Scroll to first error field
   const scrollToError = () => {
-    if (scrollRef.current) {
-      (scrollRef.current as any).scrollTo({ y: 0, animated: true });
-    }
+    if (!scrollRef.current) return;
+    
+    // Tìm trường đầu tiên có lỗi
+    const errorFields = Object.keys(errors);
+    if (errorFields.length === 0) return;
+    
+    const firstErrorField = errorFields[0];
+    
+    setTimeout(() => {
+      const yPosition = fieldPositions.current[firstErrorField];
+      if (yPosition !== undefined && yPosition > 0) {
+        // Scroll đến vị trí trường lỗi, trừ đi 100px để hiển thị label
+        scrollRef.current?.scrollTo({ y: Math.max(0, yPosition - 100), animated: true });
+      } else {
+        // Fallback: scroll về đầu nếu không tìm thấy vị trí
+        scrollRef.current?.scrollTo({ y: 0, animated: true });
+      }
+    }, 100);
   };
 
   const pickImages = async () => {
@@ -889,129 +907,139 @@ function CreatePassForm({
       <View style={s.sectionCard}>
         <Text style={s.sectionTitle}>Thông tin chính</Text>
         <View style={{ gap: 10, marginTop: 10 }}>
-          <Text style={s.fieldLabel}>
-            Tiêu đề <Text style={{ color: themeColors.danger }}>*</Text>
-          </Text>
-          <TextInput
-            style={[s.input, errors.title && { borderColor: themeColors.danger, borderWidth: 1 }]}
-            placeholder={
-              type === "room"
-                ? "Pass phòng trọ 25m² Cầu Giấy, đủ đồ..."
-                : "Bàn học gỗ + ghế, còn mới 90%"
-            }
-            placeholderTextColor="#64748b"
-            value={type === "room" ? roomForm.title : itemForm.title}
-            onChangeText={(val) => {
-              if (errors.title) {
-                setErrors((prev) => ({ ...prev, title: "" }));
+          <View onLayout={(e) => (fieldPositions.current.title = e.nativeEvent.layout.y)}>
+            <Text style={s.fieldLabel}>
+              Tiêu đề <Text style={{ color: themeColors.danger }}>*</Text>
+            </Text>
+            <TextInput
+              style={[s.input, errors.title && { borderColor: themeColors.danger, borderWidth: 1 }]}
+              placeholder={
+                type === "room"
+                  ? "Pass phòng trọ 25m² Cầu Giấy, đủ đồ..."
+                  : "Bàn học gỗ + ghế, còn mới 90%"
               }
-              type === "room"
-                ? setRoomForm({ ...roomForm, title: val })
-                : setItemForm({ ...itemForm, title: val });
-            }}
-          />
-          <ErrorText field="title" />
+              placeholderTextColor="#64748b"
+              value={type === "room" ? roomForm.title : itemForm.title}
+              onChangeText={(val) => {
+                if (errors.title) {
+                  setErrors((prev) => ({ ...prev, title: "" }));
+                }
+                type === "room"
+                  ? setRoomForm({ ...roomForm, title: val })
+                  : setItemForm({ ...itemForm, title: val });
+              }}
+            />
+            <ErrorText field="title" />
+          </View>
 
-          <Text style={s.fieldLabel}>
-            Mô tả <Text style={{ color: themeColors.danger }}>*</Text>
-          </Text>
-          <TextInput
-            style={[s.input, { height: 100, textAlignVertical: "top" }, errors.description && { borderColor: themeColors.danger, borderWidth: 1 }]}
-            placeholder="Mô tả chi tiết phòng / món đồ cần pass..."
-            placeholderTextColor="#64748b"
-            multiline
-            value={
-              type === "room" ? roomForm.description : itemForm.description
-            }
-            onChangeText={(val) => {
-              if (errors.description) {
-                setErrors((prev) => ({ ...prev, description: "" }));
+          <View onLayout={(e) => (fieldPositions.current.description = e.nativeEvent.layout.y)}>
+            <Text style={s.fieldLabel}>
+              Mô tả <Text style={{ color: themeColors.danger }}>*</Text>
+            </Text>
+            <TextInput
+              style={[s.input, { height: 100, textAlignVertical: "top" }, errors.description && { borderColor: themeColors.danger, borderWidth: 1 }]}
+              placeholder="Mô tả chi tiết phòng / món đồ cần pass..."
+              placeholderTextColor="#64748b"
+              multiline
+              value={
+                type === "room" ? roomForm.description : itemForm.description
               }
-              type === "room"
-                ? setRoomForm({ ...roomForm, description: val })
-                : setItemForm({ ...itemForm, description: val });
-            }}
-          />
-          <ErrorText field="description" />
+              onChangeText={(val) => {
+                if (errors.description) {
+                  setErrors((prev) => ({ ...prev, description: "" }));
+                }
+                type === "room"
+                  ? setRoomForm({ ...roomForm, description: val })
+                  : setItemForm({ ...itemForm, description: val });
+              }}
+            />
+            <ErrorText field="description" />
+          </View>
 
-          <Text style={s.fieldLabel}>
-            {type === "room"
-              ? "Giá thuê (VNĐ/tháng)"
-              : itemForm.dealType === "give_away"
-                ? "Giá (0đ - Cho tặng)"
-                : "Giá bán (VNĐ)"}
-            {(type === "room" || (type === "item" && itemForm.dealType !== "give_away")) && (
-              <Text style={{ color: themeColors.danger }}> *</Text>
-            )}
-          </Text>
-          <TextInput
-            style={[
-              s.input,
-              type === "item" &&
-                itemForm.dealType === "give_away" && { opacity: 0.6 },
-              errors.price && { borderColor: themeColors.danger, borderWidth: 1 },
-            ]}
-            placeholder="Giá (VNĐ)"
-            placeholderTextColor="#64748b"
-            keyboardType="numeric"
-            editable={type === "room" || itemForm.dealType !== "give_away"}
-            value={
-              type === "room"
-                ? roomForm.price
+          <View onLayout={(e) => (fieldPositions.current.price = e.nativeEvent.layout.y)}>
+            <Text style={s.fieldLabel}>
+              {type === "room"
+                ? "Giá thuê (VNĐ/tháng)"
                 : itemForm.dealType === "give_away"
-                  ? "0"
-                  : itemForm.price
-            }
-            onChangeText={(val) => {
-              if (errors.price) {
-                setErrors((prev) => ({ ...prev, price: "" }));
+                  ? "Giá (0đ - Cho tặng)"
+                  : "Giá bán (VNĐ)"}
+              {(type === "room" || (type === "item" && itemForm.dealType !== "give_away")) && (
+                <Text style={{ color: themeColors.danger }}> *</Text>
+              )}
+            </Text>
+            <TextInput
+              style={[
+                s.input,
+                type === "item" &&
+                  itemForm.dealType === "give_away" && { opacity: 0.6 },
+                errors.price && { borderColor: themeColors.danger, borderWidth: 1 },
+              ]}
+              placeholder="Giá (VNĐ)"
+              placeholderTextColor="#64748b"
+              keyboardType="numeric"
+              editable={type === "room" || itemForm.dealType !== "give_away"}
+              value={
+                type === "room"
+                  ? roomForm.price
+                  : itemForm.dealType === "give_away"
+                    ? "0"
+                    : itemForm.price
               }
-              type === "room"
-                ? setRoomForm({ ...roomForm, price: val })
-                : setItemForm({ ...itemForm, price: val });
-            }}
-          />
-          <ErrorText field="price" />
+              onChangeText={(val) => {
+                if (errors.price) {
+                  setErrors((prev) => ({ ...prev, price: "" }));
+                }
+                type === "room"
+                  ? setRoomForm({ ...roomForm, price: val })
+                  : setItemForm({ ...itemForm, price: val });
+              }}
+            />
+            <ErrorText field="price" />
+          </View>
 
-          <Text style={s.fieldLabel}>
-            Khu vực (quận, thành phố) <Text style={{ color: themeColors.danger }}>*</Text>
-          </Text>
-          <TextInput
-            style={[s.input, errors.location && { borderColor: themeColors.danger, borderWidth: 1 }]}
-            placeholder="Cầu Giấy, Hà Nội"
-            placeholderTextColor="#64748b"
-            value={type === "room" ? roomForm.location : itemForm.location}
-            onChangeText={(val) => {
-              if (errors.location) {
-                setErrors((prev) => ({ ...prev, location: "" }));
-              }
-              type === "room"
-                ? setRoomForm({ ...roomForm, location: val })
-                : setItemForm({ ...itemForm, location: val });
-            }}
-          />
-          <ErrorText field="location" />
+          <View onLayout={(e) => (fieldPositions.current.location = e.nativeEvent.layout.y)}>
+            <Text style={s.fieldLabel}>
+              Khu vực (quận, thành phố) <Text style={{ color: themeColors.danger }}>*</Text>
+            </Text>
+            <TextInput
+              style={[s.input, errors.location && { borderColor: themeColors.danger, borderWidth: 1 }]}
+              placeholder="Cầu Giấy, Hà Nội"
+              placeholderTextColor="#64748b"
+              value={type === "room" ? roomForm.location : itemForm.location}
+              onChangeText={(val) => {
+                if (errors.location) {
+                  setErrors((prev) => ({ ...prev, location: "" }));
+                }
+                type === "room"
+                  ? setRoomForm({ ...roomForm, location: val })
+                  : setItemForm({ ...itemForm, location: val });
+              }}
+            />
+            <ErrorText field="location" />
+          </View>
 
-          <Text style={s.fieldLabel}>
-            Thông tin liên hệ (SĐT, Zalo - chỉ hiển thị với người đã đăng nhập)
-            <Text style={{ color: themeColors.danger }}> *</Text>
-          </Text>
-          <TextInput
-            style={[s.input, errors.contact && { borderColor: themeColors.danger, borderWidth: 1 }]}
-            placeholder="SĐT / Zalo: 0900000000"
-            placeholderTextColor="#64748b"
-            keyboardType="phone-pad"
-            value={type === "room" ? roomForm.contact : itemForm.contact}
-            onChangeText={(val) => {
-              if (errors.contact) {
-                setErrors((prev) => ({ ...prev, contact: "" }));
-              }
-              type === "room"
-                ? setRoomForm({ ...roomForm, contact: val })
-                : setItemForm({ ...itemForm, contact: val });
-            }}
-          />
-          <ErrorText field="contact" />
+          <View onLayout={(e) => (fieldPositions.current.contact = e.nativeEvent.layout.y)}>
+            <Text style={s.fieldLabel}>
+              Thông tin liên hệ (SĐT, Zalo - chỉ hiển thị với người đã đăng nhập)
+              <Text style={{ color: themeColors.danger }}> *</Text>
+            </Text>
+            <TextInput
+              style={[s.input, errors.contact && { borderColor: themeColors.danger, borderWidth: 1 }]}
+              placeholder="SĐT / Zalo: 0900000000"
+              placeholderTextColor="#64748b"
+              keyboardType="phone-pad"
+              value={type === "room" ? roomForm.contact : itemForm.contact}
+              onChangeText={(val) => {
+                if (errors.contact) {
+                  setErrors((prev) => ({ ...prev, contact: "" }));
+                }
+                type === "room"
+                  ? setRoomForm({ ...roomForm, contact: val })
+                  : setItemForm({ ...itemForm, contact: val });
+              }}
+            />
+            <ErrorText field="contact" />
+          </View>
         </View>
       </View>
 
@@ -1020,69 +1048,77 @@ function CreatePassForm({
         <View style={s.sectionCard}>
           <Text style={s.sectionTitle}>Thông tin phòng</Text>
           <View style={{ gap: 10, marginTop: 10 }}>
-            <Text style={s.fieldLabel}>
-              Địa chỉ chi tiết của phòng{" "}
-              <Text style={{ color: themeColors.danger }}>*</Text>
-            </Text>
-            <TextInput
-              style={[s.input, errors.address && { borderColor: themeColors.danger, borderWidth: 1 }]}
-              placeholder="VD: Số 12 ngõ 45 Cầu Giấy, Hà Nội"
-              placeholderTextColor="#64748b"
-              value={roomForm.address}
-              onChangeText={(val) => {
-                if (errors.address) setErrors((prev) => ({ ...prev, address: "" }));
-                setRoomForm({ ...roomForm, address: val });
-              }}
-            />
-            <ErrorText field="address" />
-
-            <Text style={s.fieldLabel}>
-              Tiền cọc (VNĐ) <Text style={{ color: themeColors.danger }}>*</Text>
-            </Text>
-            <TextInput
-              style={[s.input, errors.deposit && { borderColor: themeColors.danger, borderWidth: 1 }]}
-              placeholder="VD: 3000000"
-              placeholderTextColor="#64748b"
-              keyboardType="numeric"
-              value={roomForm.deposit}
-              onChangeText={(val) => {
-                if (errors.deposit) setErrors((prev) => ({ ...prev, deposit: "" }));
-                setRoomForm({ ...roomForm, deposit: val });
-              }}
-            />
-            <ErrorText field="deposit" />
-
-            <Text style={s.fieldLabel}>
-              Số tháng hợp đồng còn lại (0 - 120){" "}
-              <Text style={{ color: themeColors.danger }}>*</Text>
-            </Text>
-            <TextInput
-              style={[s.input, errors.remainingLeaseMonths && { borderColor: themeColors.danger, borderWidth: 1 }]}
-              placeholder="VD: 6 (tháng)"
-              placeholderTextColor="#64748b"
-              keyboardType="numeric"
-              value={roomForm.remainingLeaseMonths}
-              onChangeText={(val) => {
-                if (errors.remainingLeaseMonths) setErrors((prev) => ({ ...prev, remainingLeaseMonths: "" }));
-                setRoomForm({ ...roomForm, remainingLeaseMonths: val });
-              }}
-            />
-            <ErrorText field="remainingLeaseMonths" />
-
-            <Text style={s.fieldLabel}>
-              Bàn giao từ ngày <Text style={{ color: themeColors.danger }}>*</Text>
-            </Text>
-            <Pressable
-              style={[s.input, errors.availableFrom && { borderColor: themeColors.danger, borderWidth: 1 }]}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <Text style={{ color: roomForm.availableFrom ? themeColors.text : "#64748b" }}>
-                {roomForm.availableFrom 
-                  ? new Date(roomForm.availableFrom).toLocaleDateString("vi-VN")
-                  : "Chọn ngày bàn giao"}
+            <View onLayout={(e) => (fieldPositions.current.address = e.nativeEvent.layout.y)}>
+              <Text style={s.fieldLabel}>
+                Địa chỉ chi tiết của phòng{" "}
+                <Text style={{ color: themeColors.danger }}>*</Text>
               </Text>
-            </Pressable>
-            <ErrorText field="availableFrom" />
+              <TextInput
+                style={[s.input, errors.address && { borderColor: themeColors.danger, borderWidth: 1 }]}
+                placeholder="VD: Số 12 ngõ 45 Cầu Giấy, Hà Nội"
+                placeholderTextColor="#64748b"
+                value={roomForm.address}
+                onChangeText={(val) => {
+                  if (errors.address) setErrors((prev) => ({ ...prev, address: "" }));
+                  setRoomForm({ ...roomForm, address: val });
+                }}
+              />
+              <ErrorText field="address" />
+            </View>
+
+            <View onLayout={(e) => (fieldPositions.current.deposit = e.nativeEvent.layout.y)}>
+              <Text style={s.fieldLabel}>
+                Tiền cọc (VNĐ) <Text style={{ color: themeColors.danger }}>*</Text>
+              </Text>
+              <TextInput
+                style={[s.input, errors.deposit && { borderColor: themeColors.danger, borderWidth: 1 }]}
+                placeholder="VD: 3000000"
+                placeholderTextColor="#64748b"
+                keyboardType="numeric"
+                value={roomForm.deposit}
+                onChangeText={(val) => {
+                  if (errors.deposit) setErrors((prev) => ({ ...prev, deposit: "" }));
+                  setRoomForm({ ...roomForm, deposit: val });
+                }}
+              />
+              <ErrorText field="deposit" />
+            </View>
+
+            <View onLayout={(e) => (fieldPositions.current.remainingLeaseMonths = e.nativeEvent.layout.y)}>
+              <Text style={s.fieldLabel}>
+                Số tháng hợp đồng còn lại (0 - 120){" "}
+                <Text style={{ color: themeColors.danger }}>*</Text>
+              </Text>
+              <TextInput
+                style={[s.input, errors.remainingLeaseMonths && { borderColor: themeColors.danger, borderWidth: 1 }]}
+                placeholder="VD: 6 (tháng)"
+                placeholderTextColor="#64748b"
+                keyboardType="numeric"
+                value={roomForm.remainingLeaseMonths}
+                onChangeText={(val) => {
+                  if (errors.remainingLeaseMonths) setErrors((prev) => ({ ...prev, remainingLeaseMonths: "" }));
+                  setRoomForm({ ...roomForm, remainingLeaseMonths: val });
+                }}
+              />
+              <ErrorText field="remainingLeaseMonths" />
+            </View>
+
+            <View onLayout={(e) => (fieldPositions.current.availableFrom = e.nativeEvent.layout.y)}>
+              <Text style={s.fieldLabel}>
+                Bàn giao từ ngày <Text style={{ color: themeColors.danger }}>*</Text>
+              </Text>
+              <Pressable
+                style={[s.input, errors.availableFrom && { borderColor: themeColors.danger, borderWidth: 1 }]}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Text style={{ color: roomForm.availableFrom ? themeColors.text : "#64748b" }}>
+                  {roomForm.availableFrom 
+                    ? new Date(roomForm.availableFrom).toLocaleDateString("vi-VN")
+                    : "Chọn ngày bàn giao"}
+                </Text>
+              </Pressable>
+              <ErrorText field="availableFrom" />
+            </View>
             {showDatePicker && (
               <DateTimePicker
                 value={roomForm.availableFrom ? new Date(roomForm.availableFrom) : (() => {
@@ -1133,23 +1169,25 @@ function CreatePassForm({
               />
             </View>
 
-            <Text style={s.fieldLabel}>
-              Điều khoản chuyển nhượng <Text style={{ color: themeColors.danger }}>*</Text>
-            </Text>
-            <TextInput
-              style={[s.input, { height: 80, textAlignVertical: "top" }, errors.transferTerms && { borderColor: themeColors.danger, borderWidth: 1 }]}
-              placeholder="VD: Bên nhận chuyển lại tiền cọc cho bên pass..."
-              placeholderTextColor="#64748b"
-              multiline
-              value={roomForm.transferTerms}
-              onChangeText={(val) => {
-                if (errors.transferTerms) {
-                  setErrors((prev) => ({ ...prev, transferTerms: "" }));
-                }
-                setRoomForm({ ...roomForm, transferTerms: val });
-              }}
-            />
-            <ErrorText field="transferTerms" />
+            <View onLayout={(e) => (fieldPositions.current.transferTerms = e.nativeEvent.layout.y)}>
+              <Text style={s.fieldLabel}>
+                Điều khoản chuyển nhượng <Text style={{ color: themeColors.danger }}>*</Text>
+              </Text>
+              <TextInput
+                style={[s.input, { height: 80, textAlignVertical: "top" }, errors.transferTerms && { borderColor: themeColors.danger, borderWidth: 1 }]}
+                placeholder="VD: Bên nhận chuyển lại tiền cọc cho bên pass..."
+                placeholderTextColor="#64748b"
+                multiline
+                value={roomForm.transferTerms}
+                onChangeText={(val) => {
+                  if (errors.transferTerms) {
+                    setErrors((prev) => ({ ...prev, transferTerms: "" }));
+                  }
+                  setRoomForm({ ...roomForm, transferTerms: val });
+                }}
+              />
+              <ErrorText field="transferTerms" />
+            </View>
           </View>
         </View>
       )}
@@ -1222,7 +1260,7 @@ function CreatePassForm({
       )}
 
       {/* 4. Hình ảnh */}
-      <View style={s.sectionCard}>
+      <View style={s.sectionCard} onLayout={(e) => (fieldPositions.current.images = e.nativeEvent.layout.y)}>
         <Text style={s.sectionTitle}>
           Hình ảnh ({imageAssets.length}/8) <Text style={{ color: themeColors.danger }}>*</Text>
         </Text>
