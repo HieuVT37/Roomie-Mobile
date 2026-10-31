@@ -193,7 +193,7 @@ export default function EditProfileScreen() {
         }
       })
       .catch((err: any) => {
-        console.log("Lỗi lấy thông tin hồ sơ:", err);
+        // Error handling for profile fetch
       })
       .finally(() => setLoading(false));
   }, []);

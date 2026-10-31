@@ -116,34 +116,125 @@ export function validateAccommodationForm(
   values: AccommodationFormValues,
 ): AccommodationFormErrors {
   const errors: AccommodationFormErrors = {};
-  if (!values.title.trim()) errors.title = "Vui lòng nhập tiêu đề bài đăng.";
-
-  const hasDistrict = Boolean(values.district?.trim());
-  const hasCity = Boolean(values.city?.trim());
-  const hasStructured = hasDistrict || (hasCity && !values.address?.trim());
-
-  if (hasStructured) {
-    if (!values.city?.trim()) errors.city = "Vui lòng nhập tỉnh/thành phố.";
-    if (!values.district?.trim()) errors.district = "Vui lòng nhập quận/huyện.";
-  } else if (!values.address?.trim()) {
-    errors.address = "Vui lòng nhập địa chỉ phòng.";
+  
+  // 1. Tiêu đề bắt buộc
+  if (!values.title.trim()) {
+    errors.title = "Vui lòng nhập tiêu đề bài đăng.";
   }
 
-  if (parseRentAmount(values.price) === null) {
-    errors.price = "Giá thuê phải là số nguyên không âm, ví dụ 3.500.000.";
+  // 2. Giá thuê: bắt buộc, số > 0
+  const price = parseRentAmount(values.price);
+  if (!values.price?.trim()) {
+    errors.price = "Vui lòng nhập giá thuê.";
+  } else if (price === null) {
+    errors.price = "Giá thuê phải là số nguyên không âm";
+  } else if (price <= 0) {
+    errors.price = "Giá thuê phải lớn hơn 0.";
   }
-  if (values.deposit?.trim() && parseRentAmount(values.deposit) === null) {
-    errors.deposit = "Tiền cọc phải là số tiền hợp lệ.";
+
+  // 3. Tiền cọc: bắt buộc, số > 0
+  const deposit = parseRentAmount(values.deposit);
+  if (!values.deposit?.trim()) {
+    errors.deposit = "Vui lòng nhập tiền cọc.";
+  } else if (deposit === null) {
+    errors.deposit = "Tiền cọc phải là số nguyên không âm";
+  } else if (deposit <= 0) {
+    errors.deposit = "Tiền cọc phải lớn hơn 0.";
   }
-  if (values.electricity?.trim() && parseRentAmount(values.electricity) === null) {
-    errors.electricity = "Giá điện phải là số hợp lệ.";
+
+  // 4. Mô tả: bắt buộc, ít nhất 20 ký tự
+  if (!values.description?.trim()) {
+    errors.description = "Vui lòng nhập mô tả phòng.";
+  } else if (values.description.trim().length < 20) {
+    errors.description = "Mô tả phòng phải có ít nhất 20 ký tự.";
   }
-  if (values.water?.trim() && parseRentAmount(values.water) === null) {
+
+  // 5. Địa chỉ: tất cả bắt buộc
+  if (!values.city?.trim()) errors.city = "Vui lòng nhập tỉnh/thành phố.";
+  if (!values.district?.trim()) errors.district = "Vui lòng nhập quận/huyện.";
+  if (!values.ward?.trim()) errors.ward = "Vui lòng nhập phường/xã.";
+  if (!values.street?.trim()) errors.street = "Vui lòng nhập số nhà, đường.";
+
+  // 6. Diện tích: bắt buộc, số > 0
+  if (!values.area?.trim()) {
+    errors.area = "Vui lòng nhập diện tích.";
+  } else {
+    const areaNum = Number(values.area.trim().replace(/,/g, "."));
+    if (isNaN(areaNum) || areaNum <= 0) {
+      errors.area = "Diện tích phải là số lớn hơn 0.";
+    }
+  }
+
+  // 7. Số người tối đa: bắt buộc, số > 0
+  if (!values.maxOccupants?.trim()) {
+    errors.maxOccupants = "Vui lòng nhập số người tối đa.";
+  } else {
+    const occupants = Number(values.maxOccupants.trim());
+    if (isNaN(occupants) || occupants <= 0 || !Number.isInteger(occupants)) {
+      errors.maxOccupants = "Số người phải là số nguyên lớn hơn 0.";
+    }
+  }
+
+  // 8. Ngày dọn vào: bắt buộc
+  if (!values.availableFrom?.trim()) {
+    errors.availableFrom = "Vui lòng chọn ngày có thể dọn vào.";
+  }
+
+  // 9. Giá điện: bắt buộc, số > 0
+  const elec = parseRentAmount(values.electricity);
+  if (!values.electricity?.trim()) {
+    errors.electricity = "Vui lòng nhập giá điện.";
+  } else if (elec === null) {
+    errors.electricity = "Giá điện phải là số nguyên dương.";
+  } else if (elec == 0) {
+    errors.electricity = "Giá điện phải lớn hơn 0.";
+  }
+
+  // 10. Giá nước: bắt buộc, số > 0
+  const water = parseRentAmount(values.water);
+  if (!values.water?.trim()) {
+    errors.water = "Vui lòng nhập giá nước.";
+  } else if (water === null) {
     errors.water = "Giá nước phải là số hợp lệ.";
+  } else if (water <= 0) {
+    errors.water = "Giá nước phải lớn hơn 0.";
   }
-  if (values.internet?.trim() && parseRentAmount(values.internet) === null) {
+
+  // 11. Internet: bắt buộc, số > 0
+  const internet = parseRentAmount(values.internet);
+  if (!values.internet?.trim()) {
+    errors.internet = "Vui lòng nhập tiền internet.";
+  } else if (internet === null) {
     errors.internet = "Tiền internet phải là số hợp lệ.";
+  } else if (internet <= 0) {
+    errors.internet = "Tiền internet phải lớn hơn 0.";
   }
+
+  // 12. Chi phí khác: bắt buộc, số >= 0
+  if (!values.otherCost?.trim()) {
+    errors.otherCost = "Vui lòng nhập chi phí khác (nhập 0 nếu không có).";
+  } else {
+    const other = parseRentAmount(values.otherCost);
+    if (other === null || other < 0) {
+      errors.otherCost = "Chi phí khác phải là số không âm.";
+    }
+  }
+
+  // 13. Điều khoản thuê: bắt buộc
+  if (!values.rentalTerms?.trim()) {
+    errors.rentalTerms = "Vui lòng nhập điều khoản thuê.";
+  }
+
+  // 14. Số điện thoại: bắt buộc, 10 số, bắt đầu bằng 0
+  if (!values.contact?.trim()) {
+    errors.contact = "Vui lòng nhập số điện thoại liên hệ.";
+  } else {
+    const phone = values.contact.trim().replace(/[\s\-]/g, ""); // Xóa space và dấu -
+    if (!/^0\d{9}$/.test(phone)) {
+      errors.contact = "Số điện thoại phải gồm 10 số và bắt đầu bằng 0.";
+    }
+  }
+
   return errors;
 }
 
@@ -193,10 +284,10 @@ export function buildAccommodationPayload(
       title: values.title.trim(),
       price,
       address: {
-        city: values.city.trim() || "Hà Nội",
+        city: values.city.trim(),
         district: values.district.trim(),
-        ward: values.ward?.trim() || undefined,
-        street: values.street?.trim() || undefined,
+        ward: values.ward.trim(),
+        street: values.street.trim(),
       },
       roomType: values.roomType?.trim() || "single",
       description: values.description?.trim() || undefined,

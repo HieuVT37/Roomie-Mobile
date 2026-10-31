@@ -4,37 +4,39 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    Alert,
-    FlatList,
-    Image,
-    Platform,
-    Pressable,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    View,
+  Alert,
+  FlatList,
+  Image,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View
 } from "react-native";
 import {
-    createPassApi,
-    deletePassApi,
-    listPassApi,
-    myPassApi,
+  createPassApi,
+  deletePassApi,
+  getPassApi,
+  listPassApi,
+  myPassApi
 } from "../../api/pass";
 import { uploadImagesApi } from "../../api/uploads";
 import { PassCard } from "../../components/cards";
+import { EditPassModalInline } from "../../components/pass/EditPassModalInline";
 import { Loading, Segments, shared } from "../../components/ui";
 import {
-    useInfiniteList,
-    useTabPressScrollTop,
+  useInfiniteList,
+  useTabPressScrollTop,
 } from "../../hooks/use-infinite-list";
 import {
-    CONDITION_LABELS,
-    DEAL_LABELS,
-    ITEM_CATEGORY_LABELS,
-    normalizeVietnamese,
+  CONDITION_LABELS,
+  DEAL_LABELS,
+  ITEM_CATEGORY_LABELS,
+  normalizeVietnamese,
 } from "../../utils/labels";
 
 const themeColors = {
@@ -80,6 +82,10 @@ export default function PassListScreen() {
   const [isSearching, setIsSearching] = useState(false);
   // Danh sách các bài pass vừa tạo trên client để luôn hiển thị ngay lập tức
   const [recentCreated, setRecentCreated] = useState<any[]>([]);
+  
+  // State cho modal chỉnh sửa
+  const [editingItem, setEditingItem] = useState<any>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   const listRef = useRef<FlatList>(null);
   useTabPressScrollTop(listRef);
@@ -150,6 +156,11 @@ export default function PassListScreen() {
     const serverItems = list.items || [];
     if (tab === "create") return [];
 
+    // Chỉ hiển thị tin đã được duyệt ở tab room/item (không áp dụng cho "Tin của tôi")
+    let filteredByModeration = tab === "mine"
+      ? serverItems
+      : serverItems.filter((item: any) => item.moderationStatus === "approved");
+
     // Lọc các bài vừa tạo khớp với tab hiện tại
     const relevantRecent = recentCreated.filter((item) => {
       if (tab === "mine") return true;
@@ -160,13 +171,13 @@ export default function PassListScreen() {
 
     // Tránh trùng lặp id
     const existingIds = new Set(
-      serverItems.map((it: any) => String(it.id || it._id)),
+      filteredByModeration.map((it: any) => String(it.id || it._id)),
     );
     const uniqueRecent = relevantRecent.filter(
       (it: any) => !existingIds.has(String(it.id || it._id)),
     );
 
-    let allItems = [...uniqueRecent, ...serverItems];
+    let allItems = [...uniqueRecent, ...filteredByModeration];
 
     if (q) {
       const normQ = normalizeVietnamese(q);
@@ -193,11 +204,9 @@ export default function PassListScreen() {
     createdItem: any,
     createdType: "room" | "item",
   ) => {
-    if (createdItem) {
-      setRecentCreated((prev) => [createdItem, ...prev]);
-    }
-    // Chuyển ngay đến tab tương ứng để người dùng thấy bài vừa đăng
-    setTab(createdType);
+    // KHÔNG thêm vào recentCreated nữa vì bài đăng cần được duyệt trước
+    // Chỉ chuyển đến tab "Tin của tôi" để người dùng xem trạng thái
+    setTab("mine");
   };
 
   const handleDeleteMine = (item: any) => {
@@ -383,15 +392,30 @@ export default function PassListScreen() {
                       </View>
                       <Pressable
                         style={s.mineEditBtn}
-                        onPress={() =>
-                          router.push({
-                            pathname: "/pass/[id]",
-                            params: {
-                              id: String(item.id || item._id),
-                              edit: "true",
-                            },
-                          })
-                        }
+                        onPress={async () => {
+                          const id = item.id || item._id;
+                          try {
+                            const detail = await getPassApi(id);
+                            // Server có thể wrap: { listing, contact } hoặc trực tiếp trả item
+                            const listing = detail?.listing || detail;
+                            // Lấy contact từ nhiều nguồn có thể, ưu tiên contact field trước
+                            const contact = 
+                              detail?.contact ||
+                              listing.contact || 
+                              listing.contactPhone || 
+                              detail?.contactPhone ||
+                              item.contact || 
+                              item.contactPhone || 
+                              "";
+                            // Đảm bảo contact được set vào listing object
+                            setEditingItem({ ...listing, contact: String(contact || "") });
+                          } catch {
+                            // Nếu fetch thất bại, dùng data hiện có và lấy contact
+                            const contact = item.contact || item.contactPhone || "";
+                            setEditingItem({ ...item, contact: String(contact || "") });
+                          }
+                          setShowEditModal(true);
+                        }}
                       >
                         <Text style={s.mineEditBtnText}> Sửa</Text>
                       </Pressable>
@@ -408,6 +432,23 @@ export default function PassListScreen() {
             />
           )}
         </>
+      )}
+
+      {/* Modal Chỉnh sửa bài Pass */}
+      {showEditModal && editingItem && (
+        <EditPassModalInline
+          visible={showEditModal}
+          initialListing={editingItem}
+          onClose={() => {
+            setShowEditModal(false);
+            setEditingItem(null);
+          }}
+          onSuccess={() => {
+            setShowEditModal(false);
+            setEditingItem(null);
+            list.refresh();
+          }}
+        />
       )}
     </View>
   );
@@ -464,6 +505,8 @@ function CreatePassForm({
 
     if (type === "room") {
       // Validate Pass Phòng
+      
+      // 1. Tiêu đề
       if (!roomForm.title.trim()) {
         newErrors.title = "Vui lòng nhập tiêu đề";
       } else if (roomForm.title.trim().length < 10) {
@@ -472,35 +515,109 @@ function CreatePassForm({
         newErrors.title = "Tiêu đề không được quá 100 ký tự";
       }
 
+      // 2. Mô tả bắt buộc nhập
+      if (!roomForm.description.trim()) {
+        newErrors.description = "Vui lòng nhập mô tả phòng";
+      }
+
+      // 3. Giá thuê là số nguyên dương > 0, bắt buộc nhập
+      if (!roomForm.price.trim()) {
+        newErrors.price = "Vui lòng nhập giá thuê";
+      } else if (isNaN(Number(roomForm.price))) {
+        newErrors.price = "Giá thuê phải là số";
+      } else {
+        const priceNum = Number(roomForm.price);
+        if (!Number.isInteger(priceNum)) {
+          newErrors.price = "Giá thuê phải là số nguyên";
+        } else if (priceNum <= 0) {
+          newErrors.price = "Giá thuê phải lớn hơn 0";
+        } else if (priceNum > 100000000) {
+          newErrors.price = "Giá thuê không hợp lệ (quá 100 triệu)";
+        }
+      }
+
+      // 4. Khu vực bắt buộc nhập
+      if (!roomForm.location.trim()) {
+        newErrors.location = "Vui lòng nhập khu vực";
+      }
+
+      // 5. Số điện thoại bắt buộc nhập và phải là 10 số bắt đầu bằng 0
+      if (!roomForm.contact.trim()) {
+        newErrors.contact = "Vui lòng nhập số điện thoại liên hệ";
+      } else {
+        const phone = roomForm.contact.trim().replace(/[\s\-]/g, ""); // Xóa space và dấu -
+        if (!/^0\d{9}$/.test(phone)) {
+          newErrors.contact = "Số điện thoại phải gồm 10 số và bắt đầu bằng 0";
+        }
+      }
+
+      // 6. Địa chỉ chi tiết phòng bắt buộc nhập
       if (!roomForm.address.trim()) {
-        newErrors.address = "Vui lòng nhập địa chỉ phòng";
+        newErrors.address = "Vui lòng nhập địa chỉ chi tiết phòng";
       }
 
-      if (roomForm.price && isNaN(Number(roomForm.price))) {
-        newErrors.price = "Giá phải là số";
-      } else if (roomForm.price && Number(roomForm.price) < 0) {
-        newErrors.price = "Giá không được âm";
-      } else if (roomForm.price && Number(roomForm.price) > 100000000) {
-        newErrors.price = "Giá không hợp lệ (quá 100 triệu)";
-      }
-
-      if (roomForm.deposit && isNaN(Number(roomForm.deposit))) {
+      // 7. Tiền cọc là số nguyên dương > 0, bắt buộc nhập
+      if (!roomForm.deposit.trim()) {
+        newErrors.deposit = "Vui lòng nhập tiền cọc";
+      } else if (isNaN(Number(roomForm.deposit))) {
         newErrors.deposit = "Tiền cọc phải là số";
-      } else if (roomForm.deposit && Number(roomForm.deposit) < 0) {
-        newErrors.deposit = "Tiền cọc không được âm";
+      } else {
+        const depositNum = Number(roomForm.deposit);
+        if (!Number.isInteger(depositNum)) {
+          newErrors.deposit = "Tiền cọc phải là số nguyên";
+        } else if (depositNum <= 0) {
+          newErrors.deposit = "Tiền cọc phải lớn hơn 0";
+        }
       }
 
+      // 8. Số tháng hợp đồng còn lại là số nguyên dương > 0, bắt buộc nhập
       const leaseMonths = roomForm.remainingLeaseMonths.trim();
       if (!leaseMonths) {
         newErrors.remainingLeaseMonths = "Vui lòng nhập số tháng hợp đồng còn lại";
       } else if (isNaN(Number(leaseMonths))) {
         newErrors.remainingLeaseMonths = "Số tháng phải là số";
-      } else if (Number(leaseMonths) < 0 || Number(leaseMonths) > 120) {
-        newErrors.remainingLeaseMonths = "Số tháng phải từ 0 đến 120";
+      } else {
+        const monthsNum = Number(leaseMonths);
+        if (!Number.isInteger(monthsNum)) {
+          newErrors.remainingLeaseMonths = "Số tháng phải là số nguyên";
+        } else if (monthsNum <= 0) {
+          newErrors.remainingLeaseMonths = "Số tháng phải lớn hơn 0";
+        } else if (monthsNum > 120) {
+          newErrors.remainingLeaseMonths = "Số tháng không được quá 120";
+        }
+      }
+
+      // 9. Bàn giao từ ngày - bắt buộc và phải từ hiện tại + số tháng hợp đồng còn lại
+      if (!roomForm.availableFrom.trim()) {
+        newErrors.availableFrom = "Vui lòng chọn ngày bàn giao";
+      } else if (leaseMonths && !isNaN(Number(leaseMonths))) {
+        const selectedDate = new Date(roomForm.availableFrom);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const monthsRemaining = Number(leaseMonths);
+        const minDate = new Date(today);
+        minDate.setMonth(minDate.getMonth() + monthsRemaining);
+        
+        if (selectedDate < minDate) {
+          newErrors.availableFrom = `Ngày bàn giao phải từ ${minDate.toLocaleDateString('vi-VN')} trở đi (hiện tại + ${monthsRemaining} tháng hợp đồng)`;
+        }
+      }
+
+      // 10. Điều khoản chuyển nhượng bắt buộc nhập
+      if (!roomForm.transferTerms.trim()) {
+        newErrors.transferTerms = "Vui lòng nhập điều khoản chuyển nhượng";
+      }
+
+      // 11. Hình ảnh bắt buộc
+      if (imageAssets.length === 0) {
+        newErrors.images = "Vui lòng thêm ít nhất 1 hình ảnh phòng";
       }
 
     } else {
       // Validate Pass Đồ
+      
+      // 1. Tiêu đề bắt buộc nhập
       if (!itemForm.title.trim()) {
         newErrors.title = "Vui lòng nhập tên món đồ";
       } else if (itemForm.title.trim().length < 5) {
@@ -509,14 +626,47 @@ function CreatePassForm({
         newErrors.title = "Tên món đồ không được quá 100 ký tự";
       }
 
+      // 2. Mô tả bắt buộc nhập
+      if (!itemForm.description.trim()) {
+        newErrors.description = "Vui lòng nhập mô tả món đồ";
+      }
+
+      // 3. Giá bán bắt buộc nhập, số nguyên dương > 0 (trừ khi là cho tặng)
       if (itemForm.dealType !== "give_away") {
-        if (itemForm.price && isNaN(Number(itemForm.price))) {
-          newErrors.price = "Giá phải là số";
-        } else if (itemForm.price && Number(itemForm.price) < 0) {
-          newErrors.price = "Giá không được âm";
-        } else if (itemForm.price && Number(itemForm.price) > 100000000) {
-          newErrors.price = "Giá không hợp lệ (quá 100 triệu)";
+        if (!itemForm.price.trim()) {
+          newErrors.price = "Vui lòng nhập giá bán";
+        } else if (isNaN(Number(itemForm.price))) {
+          newErrors.price = "Giá bán phải là số";
+        } else {
+          const priceNum = Number(itemForm.price);
+          if (!Number.isInteger(priceNum)) {
+            newErrors.price = "Giá bán phải là số nguyên";
+          } else if (priceNum <= 0) {
+            newErrors.price = "Giá bán phải lớn hơn 0";
+          } else if (priceNum > 100000000) {
+            newErrors.price = "Giá bán không hợp lệ (quá 100 triệu)";
+          }
         }
+      }
+
+      // 4. Khu vực bắt buộc nhập
+      if (!itemForm.location.trim()) {
+        newErrors.location = "Vui lòng nhập khu vực";
+      }
+
+      // 5. Thông tin liên hệ bắt buộc nhập và phải là 10 số bắt đầu bằng 0
+      if (!itemForm.contact.trim()) {
+        newErrors.contact = "Vui lòng nhập số điện thoại liên hệ";
+      } else {
+        const phone = itemForm.contact.trim().replace(/[\s\-]/g, ""); // Xóa space và dấu -
+        if (!/^0\d{9}$/.test(phone)) {
+          newErrors.contact = "Số điện thoại phải gồm 10 số và bắt đầu bằng 0";
+        }
+      }
+
+      // 6. Hình ảnh bắt buộc
+      if (imageAssets.length === 0) {
+        newErrors.images = "Vui lòng thêm ít nhất 1 hình ảnh món đồ";
       }
     }
 
@@ -527,7 +677,7 @@ function CreatePassForm({
   // Scroll to first error
   const scrollToError = () => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTo({ y: 0, animated: true });
+      (scrollRef.current as any).scrollTo({ y: 0, animated: true });
     }
   };
 
@@ -711,7 +861,7 @@ function CreatePassForm({
   };
 
   return (
-    <ScrollView ref={scrollRef} contentContainerStyle={{ padding: 16, gap: 16 }}>
+    <ScrollView ref={scrollRef as any} contentContainerStyle={{ padding: 16, gap: 16 }}>
       {/* Thông báo về kiểm duyệt */}
       <View style={{ backgroundColor: "#1e3a8a", padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "#3b82f6" }}>
         <Text style={{ color: "#93c5fd", fontSize: 13, lineHeight: 20 }}>
@@ -762,28 +912,37 @@ function CreatePassForm({
           />
           <ErrorText field="title" />
 
-          <Text style={s.fieldLabel}>Mô tả</Text>
+          <Text style={s.fieldLabel}>
+            Mô tả <Text style={{ color: themeColors.danger }}>*</Text>
+          </Text>
           <TextInput
-            style={[s.input, { height: 100, textAlignVertical: "top" }]}
+            style={[s.input, { height: 100, textAlignVertical: "top" }, errors.description && { borderColor: themeColors.danger, borderWidth: 1 }]}
             placeholder="Mô tả chi tiết phòng / món đồ cần pass..."
             placeholderTextColor="#64748b"
             multiline
             value={
               type === "room" ? roomForm.description : itemForm.description
             }
-            onChangeText={(val) =>
+            onChangeText={(val) => {
+              if (errors.description) {
+                setErrors((prev) => ({ ...prev, description: "" }));
+              }
               type === "room"
                 ? setRoomForm({ ...roomForm, description: val })
-                : setItemForm({ ...itemForm, description: val })
-            }
+                : setItemForm({ ...itemForm, description: val });
+            }}
           />
+          <ErrorText field="description" />
 
           <Text style={s.fieldLabel}>
             {type === "room"
               ? "Giá thuê (VNĐ/tháng)"
               : itemForm.dealType === "give_away"
                 ? "Giá (0đ - Cho tặng)"
-                : "Giá bán (VNĐ, để trống nếu thỏa thuận)"}
+                : "Giá bán (VNĐ)"}
+            {(type === "room" || (type === "item" && itemForm.dealType !== "give_away")) && (
+              <Text style={{ color: themeColors.danger }}> *</Text>
+            )}
           </Text>
           <TextInput
             style={[
@@ -814,33 +973,45 @@ function CreatePassForm({
           />
           <ErrorText field="price" />
 
-          <Text style={s.fieldLabel}>Khu vực (quận, thành phố)</Text>
+          <Text style={s.fieldLabel}>
+            Khu vực (quận, thành phố) <Text style={{ color: themeColors.danger }}>*</Text>
+          </Text>
           <TextInput
-            style={s.input}
+            style={[s.input, errors.location && { borderColor: themeColors.danger, borderWidth: 1 }]}
             placeholder="Cầu Giấy, Hà Nội"
             placeholderTextColor="#64748b"
             value={type === "room" ? roomForm.location : itemForm.location}
-            onChangeText={(val) =>
+            onChangeText={(val) => {
+              if (errors.location) {
+                setErrors((prev) => ({ ...prev, location: "" }));
+              }
               type === "room"
                 ? setRoomForm({ ...roomForm, location: val })
-                : setItemForm({ ...itemForm, location: val })
-            }
+                : setItemForm({ ...itemForm, location: val });
+            }}
           />
+          <ErrorText field="location" />
 
           <Text style={s.fieldLabel}>
             Thông tin liên hệ (SĐT, Zalo - chỉ hiển thị với người đã đăng nhập)
+            <Text style={{ color: themeColors.danger }}> *</Text>
           </Text>
           <TextInput
-            style={s.input}
+            style={[s.input, errors.contact && { borderColor: themeColors.danger, borderWidth: 1 }]}
             placeholder="SĐT / Zalo: 0900000000"
             placeholderTextColor="#64748b"
+            keyboardType="phone-pad"
             value={type === "room" ? roomForm.contact : itemForm.contact}
-            onChangeText={(val) =>
+            onChangeText={(val) => {
+              if (errors.contact) {
+                setErrors((prev) => ({ ...prev, contact: "" }));
+              }
               type === "room"
                 ? setRoomForm({ ...roomForm, contact: val })
-                : setItemForm({ ...itemForm, contact: val })
-            }
+                : setItemForm({ ...itemForm, contact: val });
+            }}
           />
+          <ErrorText field="contact" />
         </View>
       </View>
 
@@ -865,7 +1036,9 @@ function CreatePassForm({
             />
             <ErrorText field="address" />
 
-            <Text style={s.fieldLabel}>Tiền cọc (VNĐ)</Text>
+            <Text style={s.fieldLabel}>
+              Tiền cọc (VNĐ) <Text style={{ color: themeColors.danger }}>*</Text>
+            </Text>
             <TextInput
               style={[s.input, errors.deposit && { borderColor: themeColors.danger, borderWidth: 1 }]}
               placeholder="VD: 3000000"
@@ -896,9 +1069,11 @@ function CreatePassForm({
             />
             <ErrorText field="remainingLeaseMonths" />
 
-            <Text style={s.fieldLabel}>Bàn giao từ ngày</Text>
+            <Text style={s.fieldLabel}>
+              Bàn giao từ ngày <Text style={{ color: themeColors.danger }}>*</Text>
+            </Text>
             <Pressable
-              style={s.input}
+              style={[s.input, errors.availableFrom && { borderColor: themeColors.danger, borderWidth: 1 }]}
               onPress={() => setShowDatePicker(true)}
             >
               <Text style={{ color: roomForm.availableFrom ? themeColors.text : "#64748b" }}>
@@ -907,15 +1082,32 @@ function CreatePassForm({
                   : "Chọn ngày bàn giao"}
               </Text>
             </Pressable>
+            <ErrorText field="availableFrom" />
             {showDatePicker && (
               <DateTimePicker
-                value={roomForm.availableFrom ? new Date(roomForm.availableFrom) : new Date()}
+                value={roomForm.availableFrom ? new Date(roomForm.availableFrom) : (() => {
+                  // Tính ngày tối thiểu = hiện tại + số tháng hợp đồng còn lại
+                  const minDate = new Date();
+                  const monthsRemaining = Number(roomForm.remainingLeaseMonths) || 0;
+                  minDate.setMonth(minDate.getMonth() + monthsRemaining);
+                  return minDate;
+                })()}
                 mode="date"
                 display={Platform.OS === "ios" ? "spinner" : "default"}
+                minimumDate={(() => {
+                  // Ngày tối thiểu = hiện tại + số tháng hợp đồng còn lại
+                  const minDate = new Date();
+                  const monthsRemaining = Number(roomForm.remainingLeaseMonths) || 0;
+                  minDate.setMonth(minDate.getMonth() + monthsRemaining);
+                  return minDate;
+                })()}
                 onChange={(event, selectedDate) => {
                   setShowDatePicker(Platform.OS === "ios");
-                  if (selectedDate) {
+                  if (event.type === "set" && selectedDate) {
                     const formatted = selectedDate.toISOString().split("T")[0];
+                    if (errors.availableFrom) {
+                      setErrors((prev) => ({ ...prev, availableFrom: "" }));
+                    }
                     setRoomForm({ ...roomForm, availableFrom: formatted });
                   }
                 }}
@@ -941,17 +1133,23 @@ function CreatePassForm({
               />
             </View>
 
-            <Text style={s.fieldLabel}>Điều khoản chuyển nhượng</Text>
+            <Text style={s.fieldLabel}>
+              Điều khoản chuyển nhượng <Text style={{ color: themeColors.danger }}>*</Text>
+            </Text>
             <TextInput
-              style={[s.input, { height: 80, textAlignVertical: "top" }]}
+              style={[s.input, { height: 80, textAlignVertical: "top" }, errors.transferTerms && { borderColor: themeColors.danger, borderWidth: 1 }]}
               placeholder="VD: Bên nhận chuyển lại tiền cọc cho bên pass..."
               placeholderTextColor="#64748b"
               multiline
               value={roomForm.transferTerms}
-              onChangeText={(val) =>
-                setRoomForm({ ...roomForm, transferTerms: val })
-              }
+              onChangeText={(val) => {
+                if (errors.transferTerms) {
+                  setErrors((prev) => ({ ...prev, transferTerms: "" }));
+                }
+                setRoomForm({ ...roomForm, transferTerms: val });
+              }}
             />
+            <ErrorText field="transferTerms" />
           </View>
         </View>
       )}
@@ -1025,7 +1223,9 @@ function CreatePassForm({
 
       {/* 4. Hình ảnh */}
       <View style={s.sectionCard}>
-        <Text style={s.sectionTitle}>Hình ảnh ({imageAssets.length}/8)</Text>
+        <Text style={s.sectionTitle}>
+          Hình ảnh ({imageAssets.length}/8) <Text style={{ color: themeColors.danger }}>*</Text>
+        </Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -1054,6 +1254,7 @@ function CreatePassForm({
         <Text style={{ color: themeColors.muted, fontSize: 12, marginTop: 6 }}>
           JPG, PNG hoặc WebP, tối đa 8 ảnh.
         </Text>
+        <ErrorText field="images" />
       </View>
 
       <Pressable
@@ -1074,8 +1275,8 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginHorizontal: 12,
-    marginTop: 8,
-    marginBottom: 8,
+    marginTop: 0,
+    marginBottom: 12,
     gap: 8,
   },
   searchBar: {

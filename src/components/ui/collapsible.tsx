@@ -7,13 +7,13 @@ import { useAuth } from "../../auth/AuthContext";
 import { MessageOwnerButton } from "../../components/MessageOwnerButton";
 import { Gallery, Loading, useBottomPad } from "../../components/ui";
 import {
-  CONDITION_LABELS,
-  DEAL_LABELS,
-  ITEM_CATEGORY_LABELS,
-  PASS_STATUS_LABELS,
-  PASS_TYPE_LABELS,
-  formatVND,
-  passPriceText,
+    CONDITION_LABELS,
+    DEAL_LABELS,
+    ITEM_CATEGORY_LABELS,
+    PASS_STATUS_LABELS,
+    PASS_TYPE_LABELS,
+    formatVND,
+    passPriceText,
 } from "../../utils/labels";
 
 // Tông màu chủ đạo Dark Theme (Tím / Xanh đen)
@@ -108,7 +108,10 @@ export default function PassDetailScreen() {
       <View style={s.section}>
         <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
           <Text style={s.badge}>{(PASS_TYPE_LABELS as any)[l.type]}</Text>
-          <Text style={s.muted}>{(PASS_STATUS_LABELS as any)[l.status]}</Text>
+          {/* CHỈ HIỂN THỊ BADGE STATUS KHI ĐÃ ĐƯỢC DUYỆT */}
+          {l.moderationStatus === "approved" && (
+            <Text style={s.muted}>{(PASS_STATUS_LABELS as any)[l.status]}</Text>
+          )}
           {!isOwner && (
             <Pressable onPress={toggleFavorite} style={{ marginLeft: "auto" }}>
               <Text style={{ fontSize: 26 }}>{fav ? "❤️" : "🤍"}</Text>

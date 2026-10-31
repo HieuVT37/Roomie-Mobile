@@ -1,3 +1,4 @@
+﻿import DateTimePicker from "@react-native-community/datetimepicker";
 import * as ImagePicker from "expo-image-picker";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -5,14 +6,15 @@ import {
   Alert,
   Image,
   Keyboard,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  View,
+  View
 } from "react-native";
-import { createAccommodationApi } from "../../api/accommodations";
+import { createAccommodationApi, updateAccommodationApi } from "../../api/accommodations";
 import { uploadImagesApi } from "../../api/uploads";
 import {
   accommodationErrorMessage,
@@ -25,30 +27,88 @@ import {
 import { AMENITIES, ROOM_TYPE_LABELS } from "../../utils/labels";
 import { colors, KeyboardScreen, useBottomPad } from "../ui";
 
-const POPULAR_DISTRICTS = [
-  "Thạch Thất",
-  "Cầu Giấy",
-  "Nam Từ Liêm",
-  "Bắc Từ Liêm",
-  "Đống Đa",
-  "Thanh Xuân",
-  "Hai Bà Trưng",
-  "Hà Đông",
-];
+interface CreateAccommodationFormProps {
+  onSuccess: () => void;
+  initialData?: any;
+  initialContact?: string;
+  accommodationId?: string;
+  mode?: "create" | "edit";
+}
 
-export function CreateAccommodationForm({ onSuccess }: { onSuccess: () => void }) {
-  const [values, setValues] = useState<AccommodationFormValues>({
-    ...EMPTY_ACCOMMODATION_FORM,
-    city: "Hà Nội",
-    roomType: "single",
-  });
+export function CreateAccommodationForm({ 
+  onSuccess, 
+  initialData, 
+  initialContact,
+  accommodationId,
+  mode = "create" 
+}: CreateAccommodationFormProps) {
+  // Parse initial data if in edit mode
+  const getInitialValues = (): AccommodationFormValues => {
+    if (mode === "edit" && initialData) {
+      const addr = typeof initialData.address === "object" ? initialData.address : {};
+      const costs = initialData.extraCosts || {};
+      
+      return {
+        title: initialData.title || "",
+        price: initialData.price != null ? String(initialData.price) : "",
+        deposit: initialData.deposit != null ? String(initialData.deposit) : "",
+        description: initialData.description || "",
+        address: typeof initialData.address === "string" ? initialData.address : "",
+        city: addr.city || "",
+        district: addr.district || "",
+        ward: addr.ward || "",
+        street: addr.street || "",
+        roomType: initialData.roomType || "single",
+        area: initialData.area != null ? String(initialData.area) : "",
+        maxOccupants: initialData.maxOccupants != null ? String(initialData.maxOccupants) : "",
+        availableFrom: initialData.availableFrom ? initialData.availableFrom.slice(0, 10) : "",
+        electricity: costs.electricity != null ? String(costs.electricity) : "",
+        water: costs.water != null ? String(costs.water) : "",
+        internet: costs.internet != null ? String(costs.internet) : "",
+        otherCost: costs.other || "",
+        amenities: Array.isArray(initialData.amenities) ? initialData.amenities : [],
+        rentalTerms: initialData.rentalTerms || "",
+        contact: initialData.contactPhone
+          || initialData.contact
+          || initialData.phone
+          || initialContact
+          || "",
+        images: Array.isArray(initialData.images) ? initialData.images : [],
+      };
+    }
+    return {
+      ...EMPTY_ACCOMMODATION_FORM,
+      roomType: "single",
+    };
+  };
+
+  const [values, setValues] = useState<AccommodationFormValues>(getInitialValues());
   const [imageAssets, setImageAssets] = useState<ImagePicker.ImagePickerAsset[]>([]);
+  // Normalize: API có thể trả về string[] hoặc { url: string }[]
+  const normalizeImageUrls = (raw: any[]): string[] =>
+    (raw || []).map((img: any) => {
+      if (typeof img === "string") return img;
+      if (img && typeof img === "object") return img.url || img.uri || img.src || "";
+      return "";
+    }).filter(Boolean);
+
+  const [existingImages, setExistingImages] = useState<string[]>(
+    mode === "edit" && initialData?.images
+      ? normalizeImageUrls(initialData.images)
+      : []
+  );
   const [errors, setErrors] = useState<AccommodationFormErrors>({});
+  const [imageError, setImageError] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const submitting = useRef(false);
   const mounted = useRef(true);
+  const scrollRef = useRef<any>(null);
   const bottom = useBottomPad(28);
+
+  // Lưu vị trí Y của các trường để scroll đến trường có lỗi
+  const fieldPositions = useRef<Record<string, number>>({});
 
   useEffect(() => {
     mounted.current = true;
@@ -59,8 +119,8 @@ export function CreateAccommodationForm({ onSuccess }: { onSuccess: () => void }
 
   const updateField = (field: keyof AccommodationFormValues, value: any) => {
     setValues((previous) => ({ ...previous, [field]: value }));
-    setErrors((previous) => ({ ...previous, [field]: undefined }));
-    setSubmitError("");
+    // Không xóa lỗi khi nhập, để hiển thị tất cả lỗi cùng lúc
+    // Lỗi chỉ được xóa khi submit lại và validation pass
   };
 
   const toggleAmenity = (name: string) => {
@@ -74,18 +134,19 @@ export function CreateAccommodationForm({ onSuccess }: { onSuccess: () => void }
   };
 
   const pickImages = async () => {
-    if (imageAssets.length >= 8) {
+    const totalImages = existingImages.length + imageAssets.length;
+    if (totalImages >= 8) {
       Alert.alert("Giới hạn", "Bạn chỉ được chọn tối đa 8 hình ảnh.");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsMultipleSelection: true,
-      selectionLimit: 8 - imageAssets.length,
+      selectionLimit: 8 - totalImages,
       quality: 0.8,
     });
     if (!result.canceled && result.assets) {
-      setImageAssets((prev) => [...prev, ...result.assets].slice(0, 8));
+      setImageAssets((prev) => [...prev, ...result.assets].slice(0, 8 - existingImages.length));
     }
   };
 
@@ -93,19 +154,51 @@ export function CreateAccommodationForm({ onSuccess }: { onSuccess: () => void }
     setImageAssets((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const removeExistingImage = (index: number) => {
+    setExistingImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const submit = async () => {
     if (submitting.current) return;
+    
+    // Validate hình ảnh trước
+    const totalImages = existingImages.length + imageAssets.length;
+    if (totalImages === 0) {
+      setImageError("Vui lòng thêm ít nhất 1 hình ảnh phòng.");
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
+    setImageError("");
+    
     const validation = validateAccommodationForm(values);
+    
     setErrors(validation);
     setSubmitError("");
-    if (Object.keys(validation).length) return;
+    
+    if (Object.keys(validation).length) {
+      // Tìm trường đầu tiên có lỗi và scroll đến đó
+      const errorFields = Object.keys(validation);
+      const firstErrorField = errorFields[0];
+      
+      setTimeout(() => {
+        const yPosition = fieldPositions.current[firstErrorField];
+        if (yPosition !== undefined && yPosition > 0) {
+          // Scroll đến vị trí trường lỗi, trừ đi 100px để hiển thị label
+          scrollRef.current?.scrollTo({ y: Math.max(0, yPosition - 100), animated: true });
+        } else {
+          // Fallback: scroll về đầu nếu không tìm thấy vị trí
+          scrollRef.current?.scrollTo({ y: 0, animated: true });
+        }
+      }, 100);
+      return;
+    }
 
     submitting.current = true;
     setSaving(true);
     Keyboard.dismiss();
 
     try {
-      let uploadedUrls: string[] = [];
+      let uploadedUrls: string[] = [...existingImages];
       const currentImages = typeof imageAssets !== "undefined" ? imageAssets : [];
       const uploader = typeof uploadImagesApi !== "undefined" ? uploadImagesApi : null;
 
@@ -130,9 +223,10 @@ export function CreateAccommodationForm({ onSuccess }: { onSuccess: () => void }
           } as any;
         });
         const uploadResult = await uploader(files);
-        uploadedUrls = Array.isArray(uploadResult)
+        const newUploadedUrls = Array.isArray(uploadResult)
           ? uploadResult
           : uploadResult.urls || [];
+        uploadedUrls = [...uploadedUrls, ...newUploadedUrls];
       }
 
       const payload = buildAccommodationPayload({
@@ -140,7 +234,22 @@ export function CreateAccommodationForm({ onSuccess }: { onSuccess: () => void }
         images: uploadedUrls.length > 0 ? uploadedUrls : values.images,
       });
 
-      await createAccommodationApi(payload);
+      if (mode === "edit" && accommodationId) {
+        await updateAccommodationApi(accommodationId, payload);
+        Alert.alert(
+          "✅ Đã lưu thay đổi",
+          "Bài viết đã được cập nhật và đang chờ quản trị viên duyệt lại. Sau khi được duyệt, thay đổi sẽ hiển thị công khai.",
+          [{ text: "Đồng ý" }]
+        );
+      } else {
+        await createAccommodationApi(payload);
+        Alert.alert(
+          "✅ Đã gửi bài đăng",
+          "Bài viết của bạn đang chờ quản trị viên duyệt. Sau khi được duyệt, bài viết sẽ hiển thị công khai.\n\nBạn có thể xem trạng thái ở tab 'Tin của tôi'.",
+          [{ text: "Đồng ý" }]
+        );
+      }
+      
       if (mounted.current) onSuccess();
     } catch (error: unknown) {
       if (mounted.current) setSubmitError(accommodationErrorMessage(error));
@@ -153,20 +262,36 @@ export function CreateAccommodationForm({ onSuccess }: { onSuccess: () => void }
   return (
     <KeyboardScreen>
       <ScrollView
+        ref={scrollRef}
         style={s.scroll}
         contentContainerStyle={[s.content, { paddingBottom: bottom }]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
         <View style={s.intro}>
-          <Text style={s.title}>Đăng tin cho thuê phòng</Text>
-          <Text style={s.hint}>Điền thông tin phòng. Các mục có dấu * là bắt buộc.</Text>
+          <Text style={s.title}>
+            {mode === "edit" ? "Chỉnh sửa bài đăng" : "Đăng tin cho thuê phòng"}
+          </Text>
+          <Text style={s.hint}>
+            {mode === "edit" 
+              ? "Chỉnh sửa thông tin phòng. Các mục có dấu * là bắt buộc."
+              : "Điền thông tin phòng. Các mục có dấu * là bắt buộc."}
+          </Text>
+          <View style={{ backgroundColor: "#1e3a8a", padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "#3b82f6", marginTop: 8 }}>
+            <Text style={{ color: "#93c5fd", fontSize: 13, lineHeight: 20 }}>
+              ℹ️ <Text style={{ fontWeight: "700" }}>Lưu ý:</Text> {mode === "edit" 
+                ? "Mọi chỉnh sửa cần được quản trị viên duyệt lại trước khi hiển thị công khai."
+                : "Tất cả bài đăng cần được quản trị viên duyệt trước khi hiển thị công khai. Bạn có thể xem trạng thái ở tab 'Tin của tôi'."}
+            </Text>
+          </View>
         </View>
 
         {/* 1. Hình ảnh phòng */}
         <View style={s.card}>
           <View style={s.sectionHeader}>
-            <Text style={s.sectionTitle}>Hình ảnh phòng ({imageAssets.length}/8)</Text>
+            <Text style={s.sectionTitle}>
+              Hình ảnh phòng ({existingImages.length + imageAssets.length}/8) *
+            </Text>
             <Pressable
               accessibilityRole="button"
               style={s.pickBtn}
@@ -176,10 +301,27 @@ export function CreateAccommodationForm({ onSuccess }: { onSuccess: () => void }
               <Text style={s.pickBtnText}>+ Thêm ảnh</Text>
             </Pressable>
           </View>
-          {imageAssets.length > 0 ? (
+          {imageError && <Text accessibilityRole="alert" style={s.error}>{imageError}</Text>}
+          {(existingImages.length > 0 || imageAssets.length > 0) ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.imageRow}>
+              {/* Ảnh hiện có */}
+              {existingImages.map((url, idx) => (
+                <View key={`existing-${idx}`} style={s.imageWrapper}>
+                  <Image source={{ uri: url }} style={s.thumbnail} />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Xóa ảnh"
+                    style={s.removeImageBtn}
+                    onPress={() => removeExistingImage(idx)}
+                    disabled={saving}
+                  >
+                    <Text style={s.removeImageText}>✕</Text>
+                  </Pressable>
+                </View>
+              ))}
+              {/* Ảnh mới chọn */}
               {imageAssets.map((asset, idx) => (
-                <View key={`${asset.uri}-${idx}`} style={s.imageWrapper}>
+                <View key={`new-${asset.uri}-${idx}`} style={s.imageWrapper}>
                   <Image source={{ uri: asset.uri }} style={s.thumbnail} />
                   <Pressable
                     accessibilityRole="button"
@@ -205,123 +347,128 @@ export function CreateAccommodationForm({ onSuccess }: { onSuccess: () => void }
         <View style={s.card}>
           <Text style={s.sectionTitle}>Thông tin cơ bản</Text>
 
-          <Text style={s.label}>Tiêu đề bài đăng *</Text>
-          <TextInput
-            accessibilityLabel="Tiêu đề bài đăng, bắt buộc"
-            style={[s.input, !!errors.title && s.invalid]}
-            placeholder="Ví dụ: Phòng trọ Hoà Lạc khép kín"
-            placeholderTextColor={colors.muted}
-            value={values.title}
-            onChangeText={(value) => updateField("title", value)}
-            editable={!saving}
-            autoCapitalize="sentences"
-          />
-          {!!errors.title && <Text accessibilityRole="alert" style={s.error}>{errors.title}</Text>}
+          <View onLayout={(e) => (fieldPositions.current.title = e.nativeEvent.layout.y)}>
+            <Text style={s.label}>Tiêu đề bài đăng *</Text>
+            <TextInput
+              accessibilityLabel="Tiêu đề bài đăng, bắt buộc"
+              style={[s.input, !!errors.title && s.invalid]}
+              placeholder="Ví dụ: Phòng trọ Hoà Lạc khép kín"
+              placeholderTextColor={colors.muted}
+              value={values.title}
+              onChangeText={(value) => updateField("title", value)}
+              editable={!saving}
+              autoCapitalize="sentences"
+              returnKeyType="next"
+            />
+            {!!errors.title && <Text accessibilityRole="alert" style={s.error}>{errors.title}</Text>}
+          </View>
 
-          <Text style={s.label}>Giá thuê mỗi tháng (VNĐ) *</Text>
-          <TextInput
-            accessibilityLabel="Giá thuê mỗi tháng"
-            style={[s.input, !!errors.price && s.invalid]}
-            placeholder="Ví dụ: 3.000.000 hoặc 3000000"
-            placeholderTextColor={colors.muted}
-            keyboardType="number-pad"
-            value={values.price}
-            onChangeText={(value) => updateField("price", value)}
-            editable={!saving}
-          />
-          {!!errors.price && <Text accessibilityRole="alert" style={s.error}>{errors.price}</Text>}
+          <View onLayout={(e) => (fieldPositions.current.price = e.nativeEvent.layout.y)}>
+            <Text style={s.label}>Giá thuê mỗi tháng (VNĐ) *</Text>
+            <TextInput
+              accessibilityLabel="Giá thuê mỗi tháng"
+              style={[s.input, !!errors.price && s.invalid]}
+              placeholder="Ví dụ: 3.000.000 hoặc 3000000"
+              placeholderTextColor={colors.muted}
+              keyboardType="number-pad"
+              value={values.price}
+              onChangeText={(value) => updateField("price", value)}
+              editable={!saving}
+            />
+            {!!errors.price && <Text accessibilityRole="alert" style={s.error}>{errors.price}</Text>}
+          </View>
 
-          <Text style={s.label}>Tiền cọc (VNĐ)</Text>
-          <TextInput
-            accessibilityLabel="Tiền cọc"
-            style={[s.input, !!errors.deposit && s.invalid]}
-            placeholder="Ví dụ: 500.000"
-            placeholderTextColor={colors.muted}
-            keyboardType="number-pad"
-            value={values.deposit}
-            onChangeText={(value) => updateField("deposit", value)}
-            editable={!saving}
-          />
-          {!!errors.deposit && <Text accessibilityRole="alert" style={s.error}>{errors.deposit}</Text>}
+          <View onLayout={(e) => (fieldPositions.current.deposit = e.nativeEvent.layout.y)}>
+            <Text style={s.label}>Tiền cọc (VNĐ) *</Text>
+            <TextInput
+              accessibilityLabel="Tiền cọc"
+              style={[s.input, !!errors.deposit && s.invalid]}
+              placeholder="Ví dụ: 500.000"
+              placeholderTextColor={colors.muted}
+              keyboardType="number-pad"
+              value={values.deposit}
+              onChangeText={(value) => updateField("deposit", value)}
+              editable={!saving}
+            />
+            {!!errors.deposit && <Text accessibilityRole="alert" style={s.error}>{errors.deposit}</Text>}
+          </View>
 
-          <Text style={s.label}>Mô tả phòng</Text>
-          <TextInput
-            accessibilityLabel="Mô tả phòng"
-            style={[s.input, s.description]}
-            placeholder="Phòng trọ Hoà Lạc, gần trường đại học FPT, thoáng mát..."
-            placeholderTextColor={colors.muted}
-            multiline
-            textAlignVertical="top"
-            value={values.description}
-            onChangeText={(value) => updateField("description", value)}
-            editable={!saving}
-          />
+          <View onLayout={(e) => (fieldPositions.current.description = e.nativeEvent.layout.y)}>
+            <Text style={s.label}>Mô tả phòng *</Text>
+            <TextInput
+              accessibilityLabel="Mô tả phòng"
+              style={[s.input, s.description, !!errors.description && s.invalid]}
+              placeholder="Phòng trọ Hoà Lạc, gần trường đại học FPT, thoáng mát... (tối thiểu 20 ký tự)"
+              placeholderTextColor={colors.muted}
+              multiline
+              textAlignVertical="top"
+              value={values.description}
+              onChangeText={(value) => updateField("description", value)}
+              editable={!saving}
+            />
+            {!!errors.description && <Text accessibilityRole="alert" style={s.error}>{errors.description}</Text>}
+          </View>
         </View>
 
         {/* 3. Địa chỉ phòng */}
         <View style={s.card}>
           <Text style={s.sectionTitle}>Địa chỉ phòng</Text>
 
-          <Text style={s.label}>Tỉnh / Thành phố *</Text>
-          <TextInput
-            accessibilityLabel="Tỉnh hoặc Thành phố"
-            style={[s.input, !!errors.city && s.invalid]}
-            placeholder="Ví dụ: Hà Nội"
-            placeholderTextColor={colors.muted}
-            value={values.city}
-            onChangeText={(value) => updateField("city", value)}
-            editable={!saving}
-          />
-          {!!errors.city && <Text accessibilityRole="alert" style={s.error}>{errors.city}</Text>}
-
-          <Text style={s.label}>Quận / Huyện *</Text>
-          <TextInput
-            accessibilityLabel="Quận hoặc Huyện"
-            style={[s.input, !!errors.district && s.invalid]}
-            placeholder="Ví dụ: Thạch Thất, Cầu Giấy..."
-            placeholderTextColor={colors.muted}
-            value={values.district}
-            onChangeText={(value) => updateField("district", value)}
-            editable={!saving}
-          />
-          {!!errors.district && <Text accessibilityRole="alert" style={s.error}>{errors.district}</Text>}
-
-          <View style={s.chipWrap}>
-            {POPULAR_DISTRICTS.map((dist) => (
-              <Pressable
-                key={dist}
-                style={[s.chip, values.district === dist && s.chipSelected]}
-                onPress={() => updateField("district", dist)}
-                disabled={saving}
-              >
-                <Text style={[s.chipText, values.district === dist && s.chipTextSelected]}>
-                  {dist}
-                </Text>
-              </Pressable>
-            ))}
+          <View onLayout={(e) => (fieldPositions.current.city = e.nativeEvent.layout.y)}>
+            <Text style={s.label}>Tỉnh / Thành phố *</Text>
+            <TextInput
+              accessibilityLabel="Tỉnh hoặc Thành phố"
+              style={[s.input, !!errors.city && s.invalid]}
+              placeholder="Ví dụ: Hà Nội"
+              placeholderTextColor={colors.muted}
+              value={values.city}
+              onChangeText={(value) => updateField("city", value)}
+              editable={!saving}
+            />
+            {!!errors.city && <Text accessibilityRole="alert" style={s.error}>{errors.city}</Text>}
           </View>
 
-          <Text style={s.label}>Phường / Xã</Text>
-          <TextInput
-            accessibilityLabel="Phường hoặc Xã"
-            style={s.input}
-            placeholder="Ví dụ: Phú Hữu, Dịch Vọng..."
-            placeholderTextColor={colors.muted}
-            value={values.ward}
-            onChangeText={(value) => updateField("ward", value)}
-            editable={!saving}
-          />
+          <View onLayout={(e) => (fieldPositions.current.district = e.nativeEvent.layout.y)}>
+            <Text style={s.label}>Quận / Huyện *</Text>
+            <TextInput
+              accessibilityLabel="Quận hoặc Huyện"
+              style={[s.input, !!errors.district && s.invalid]}
+              placeholder="Ví dụ: Thạch Thất, Cầu Giấy..."
+              placeholderTextColor={colors.muted}
+              value={values.district}
+              onChangeText={(value) => updateField("district", value)}
+              editable={!saving}
+            />
+            {!!errors.district && <Text accessibilityRole="alert" style={s.error}>{errors.district}</Text>}
+          </View>
 
-          <Text style={s.label}>Số nhà, ngõ ngách, tên đường</Text>
-          <TextInput
-            accessibilityLabel="Số nhà, đường"
-            style={s.input}
-            placeholder="Ví dụ: 99 hoặc Số 12, Ngõ 1"
-            placeholderTextColor={colors.muted}
-            value={values.street}
-            onChangeText={(value) => updateField("street", value)}
-            editable={!saving}
-          />
+          <View onLayout={(e) => (fieldPositions.current.ward = e.nativeEvent.layout.y)}>
+            <Text style={s.label}>Phường / Xã *</Text>
+            <TextInput
+              accessibilityLabel="Phường hoặc Xã"
+              style={[s.input, !!errors.ward && s.invalid]}
+              placeholder="Ví dụ: Phú Hữu, Dịch Vọng..."
+              placeholderTextColor={colors.muted}
+              value={values.ward}
+              onChangeText={(value) => updateField("ward", value)}
+              editable={!saving}
+            />
+            {!!errors.ward && <Text accessibilityRole="alert" style={s.error}>{errors.ward}</Text>}
+          </View>
+
+          <View onLayout={(e) => (fieldPositions.current.street = e.nativeEvent.layout.y)}>
+            <Text style={s.label}>Số nhà, ngõ ngách, tên đường *</Text>
+            <TextInput
+              accessibilityLabel="Số nhà, đường"
+              style={[s.input, !!errors.street && s.invalid]}
+              placeholder="Ví dụ: 99 hoặc Số 12, Ngõ 1"
+              placeholderTextColor={colors.muted}
+              value={values.street}
+              onChangeText={(value) => updateField("street", value)}
+              editable={!saving}
+            />
+            {!!errors.street && <Text accessibilityRole="alert" style={s.error}>{errors.street}</Text>}
+          </View>
         </View>
 
         {/* 4. Thông tin chi tiết */}
@@ -345,10 +492,10 @@ export function CreateAccommodationForm({ onSuccess }: { onSuccess: () => void }
           </View>
 
           <View style={s.twoCols}>
-            <View style={s.col}>
-              <Text style={s.label}>Diện tích (m²)</Text>
+            <View style={s.col} onLayout={(e) => (fieldPositions.current.area = e.nativeEvent.layout.y)}>
+              <Text style={s.label}>Diện tích (m²) *</Text>
               <TextInput
-                style={s.input}
+                style={[s.input, !!errors.area && s.invalid]}
                 placeholder="Ví dụ: 25"
                 placeholderTextColor={colors.muted}
                 keyboardType="number-pad"
@@ -356,11 +503,12 @@ export function CreateAccommodationForm({ onSuccess }: { onSuccess: () => void }
                 onChangeText={(value) => updateField("area", value)}
                 editable={!saving}
               />
+              {!!errors.area && <Text accessibilityRole="alert" style={s.error}>{errors.area}</Text>}
             </View>
-            <View style={s.col}>
-              <Text style={s.label}>Số người tối đa</Text>
+            <View style={s.col} onLayout={(e) => (fieldPositions.current.maxOccupants = e.nativeEvent.layout.y)}>
+              <Text style={s.label}>Số người tối đa *</Text>
               <TextInput
-                style={s.input}
+                style={[s.input, !!errors.maxOccupants && s.invalid]}
                 placeholder="Ví dụ: 2"
                 placeholderTextColor={colors.muted}
                 keyboardType="number-pad"
@@ -368,18 +516,41 @@ export function CreateAccommodationForm({ onSuccess }: { onSuccess: () => void }
                 onChangeText={(value) => updateField("maxOccupants", value)}
                 editable={!saving}
               />
+              {!!errors.maxOccupants && <Text accessibilityRole="alert" style={s.error}>{errors.maxOccupants}</Text>}
             </View>
           </View>
 
-          <Text style={s.label}>Có thể dọn vào</Text>
-          <TextInput
-            style={s.input}
-            placeholder="Ví dụ: 20/11/2026 hoặc hôm nay"
-            placeholderTextColor={colors.muted}
-            value={values.availableFrom}
-            onChangeText={(value) => updateField("availableFrom", value)}
-            editable={!saving}
-          />
+          <View onLayout={(e) => (fieldPositions.current.availableFrom = e.nativeEvent.layout.y)}>
+            <Text style={s.label}>Có thể dọn vào *</Text>
+            <Pressable
+              accessibilityRole="button"
+              style={[s.input, !!errors.availableFrom && s.invalid]}
+              onPress={() => setShowDatePicker(true)}
+              disabled={saving}
+            >
+              <Text style={{ color: values.availableFrom ? colors.text : colors.muted, fontSize: 15 }}>
+                {values.availableFrom || "Chọn ngày có thể dọn vào"}
+              </Text>
+            </Pressable>
+            {!!errors.availableFrom && <Text accessibilityRole="alert" style={s.error}>{errors.availableFrom}</Text>}
+          </View>
+          {showDatePicker && (
+            <DateTimePicker
+              value={values.availableFrom ? new Date(values.availableFrom) : new Date()}
+              mode="date"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              minimumDate={new Date()}
+              onChange={(event, selectedDate) => {
+                setShowDatePicker(Platform.OS === "ios");
+                if (event.type === "set" && selectedDate) {
+                  const year = selectedDate.getFullYear();
+                  const month = String(selectedDate.getMonth() + 1).padStart(2, "0");
+                  const day = String(selectedDate.getDate()).padStart(2, "0");
+                  updateField("availableFrom", `${year}-${month}-${day}`);
+                }
+              }}
+            />
+          )}
         </View>
 
         {/* 5. Chi phí hàng tháng */}
@@ -387,8 +558,8 @@ export function CreateAccommodationForm({ onSuccess }: { onSuccess: () => void }
           <Text style={s.sectionTitle}>Chi phí dịch vụ</Text>
 
           <View style={s.twoCols}>
-            <View style={s.col}>
-              <Text style={s.label}>Giá điện (đ/kWh)</Text>
+            <View style={s.col} onLayout={(e) => (fieldPositions.current.electricity = e.nativeEvent.layout.y)}>
+              <Text style={s.label}>Giá điện (đ/kWh) *</Text>
               <TextInput
                 style={[s.input, !!errors.electricity && s.invalid]}
                 placeholder="Ví dụ: 3.200"
@@ -398,9 +569,10 @@ export function CreateAccommodationForm({ onSuccess }: { onSuccess: () => void }
                 onChangeText={(value) => updateField("electricity", value)}
                 editable={!saving}
               />
+              {!!errors.electricity && <Text accessibilityRole="alert" style={s.error}>{errors.electricity}</Text>}
             </View>
-            <View style={s.col}>
-              <Text style={s.label}>Giá nước (đ)</Text>
+            <View style={s.col} onLayout={(e) => (fieldPositions.current.water = e.nativeEvent.layout.y)}>
+              <Text style={s.label}>Giá nước (đ/tháng) *</Text>
               <TextInput
                 style={[s.input, !!errors.water && s.invalid]}
                 placeholder="Ví dụ: 5.000"
@@ -410,12 +582,13 @@ export function CreateAccommodationForm({ onSuccess }: { onSuccess: () => void }
                 onChangeText={(value) => updateField("water", value)}
                 editable={!saving}
               />
+              {!!errors.water && <Text accessibilityRole="alert" style={s.error}>{errors.water}</Text>}
             </View>
           </View>
 
           <View style={s.twoCols}>
-            <View style={s.col}>
-              <Text style={s.label}>Internet (đ/tháng)</Text>
+            <View style={s.col} onLayout={(e) => (fieldPositions.current.internet = e.nativeEvent.layout.y)}>
+              <Text style={s.label}>Internet (đ/tháng) *</Text>
               <TextInput
                 style={[s.input, !!errors.internet && s.invalid]}
                 placeholder="Ví dụ: 100.000"
@@ -425,6 +598,7 @@ export function CreateAccommodationForm({ onSuccess }: { onSuccess: () => void }
                 onChangeText={(value) => updateField("internet", value)}
                 editable={!saving}
               />
+              {!!errors.internet && <Text accessibilityRole="alert" style={s.error}>{errors.internet}</Text>}
             </View>
             <View style={s.col}>
               <Text style={s.label}>Chi phí khác</Text>
@@ -432,6 +606,7 @@ export function CreateAccommodationForm({ onSuccess }: { onSuccess: () => void }
                 style={s.input}
                 placeholder="Ví dụ: 250000"
                 placeholderTextColor={colors.muted}
+                keyboardType="number-pad"
                 value={values.otherCost}
                 onChangeText={(value) => updateField("otherCost", value)}
                 editable={!saving}
@@ -467,29 +642,35 @@ export function CreateAccommodationForm({ onSuccess }: { onSuccess: () => void }
         <View style={s.card}>
           <Text style={s.sectionTitle}>Điều khoản & Liên hệ</Text>
 
-          <Text style={s.label}>Điều khoản thuê</Text>
-          <TextInput
-            style={s.input}
-            placeholder="Ví dụ: Gọn gàng, sạch sẽ, không ồn ào..."
-            placeholderTextColor={colors.muted}
-            value={values.rentalTerms}
-            onChangeText={(value) => updateField("rentalTerms", value)}
-            editable={!saving}
-          />
+          <View onLayout={(e) => (fieldPositions.current.rentalTerms = e.nativeEvent.layout.y)}>
+            <Text style={s.label}>Điều khoản thuê *</Text>
+            <TextInput
+              style={[s.input, !!errors.rentalTerms && s.invalid]}
+              placeholder="Ví dụ: Gọn gàng, sạch sẽ, không ồn ào..."
+              placeholderTextColor={colors.muted}
+              value={values.rentalTerms}
+              onChangeText={(value) => updateField("rentalTerms", value)}
+              editable={!saving}
+            />
+            {!!errors.rentalTerms && <Text accessibilityRole="alert" style={s.error}>{errors.rentalTerms}</Text>}
+          </View>
 
-          <Text style={s.label}>Số điện thoại liên hệ</Text>
-          <TextInput
-            accessibilityLabel="Số điện thoại liên hệ"
-            style={s.input}
-            placeholder="Ví dụ: 0922229999"
-            placeholderTextColor={colors.muted}
-            keyboardType="phone-pad"
-            value={values.contact}
-            onChangeText={(value) => updateField("contact", value)}
-            editable={!saving}
-            returnKeyType="done"
-            onSubmitEditing={submit}
-          />
+          <View onLayout={(e) => (fieldPositions.current.contact = e.nativeEvent.layout.y)}>
+            <Text style={s.label}>Số điện thoại liên hệ *</Text>
+            <TextInput
+              accessibilityLabel="Số điện thoại liên hệ"
+              style={[s.input, !!errors.contact && s.invalid]}
+              placeholder="Ví dụ: 0922229999"
+              placeholderTextColor={colors.muted}
+              keyboardType="phone-pad"
+              value={values.contact}
+              onChangeText={(value) => updateField("contact", value)}
+              editable={!saving}
+              returnKeyType="done"
+              onSubmitEditing={submit}
+            />
+            {!!errors.contact && <Text accessibilityRole="alert" style={s.error}>{errors.contact}</Text>}
+          </View>
         </View>
 
         {/* Thông báo lỗi */}
@@ -503,14 +684,16 @@ export function CreateAccommodationForm({ onSuccess }: { onSuccess: () => void }
         {/* Nút gửi */}
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={saving ? "Đang đăng tin" : "Đăng tin phòng"}
+          accessibilityLabel={saving ? (mode === "edit" ? "Đang lưu thay đổi" : "Đang đăng tin") : (mode === "edit" ? "Lưu thay đổi" : "Đăng tin phòng")}
           accessibilityState={{ disabled: saving, busy: saving }}
           style={[s.submit, saving && s.disabled]}
           disabled={saving}
           onPress={submit}
         >
           {saving && <ActivityIndicator color="#fff" size="small" />}
-          <Text style={s.submitText}>{saving ? "Đang đăng tin..." : "Đăng tin phòng"}</Text>
+          <Text style={s.submitText}>
+            {saving ? (mode === "edit" ? "Đang lưu thay đổi..." : "Đang đăng tin...") : (mode === "edit" ? "Lưu thay đổi" : "Đăng tin phòng")}
+          </Text>
         </Pressable>
       </ScrollView>
     </KeyboardScreen>
