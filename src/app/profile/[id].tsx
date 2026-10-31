@@ -2,13 +2,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-    Alert,
-    Image,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  Alert,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { imageUrl } from "../../api/axios";
 import { sendRequestApi } from "../../api/connections";
@@ -18,12 +18,12 @@ import { useAuth } from "../../auth/AuthContext";
 import { Avatar, Loading, useBottomPad } from "../../components/ui";
 import { useLanguage } from "../../context/LanguageContext";
 import {
-    CRITERIA_LABELS,
-    formatVND,
-    GENDER_LABELS,
-    GUEST_LABELS,
-    PATTERN_LABELS,
-    SHARED_LABELS,
+  CRITERIA_LABELS,
+  formatVND,
+  GENDER_LABELS,
+  GUEST_LABELS,
+  PATTERN_LABELS,
+  SHARED_LABELS,
 } from "../../utils/labels";
 
 const themeColors = {
@@ -36,6 +36,12 @@ const themeColors = {
   success: "#10b981",
   warning: "#d97706",
   danger: "#ef4444",
+};
+
+// Tra nhãn an toàn: tránh lỗi "implicitly has an 'any' type" khi index bằng key động
+const pick = (map: object, key: any): string => {
+  if (key === undefined || key === null) return "";
+  return (map as Record<string, string>)[String(key)] || String(key);
 };
 
 function InfoRow({
@@ -103,7 +109,7 @@ export default function UserDetailScreen() {
   }>();
   const router = useRouter();
   const { user: currentUser } = useAuth();
-  const { language, toggleLanguage, t } = useLanguage();
+  const { t } = useLanguage();
   const bottom = useBottomPad(20);
 
   const initialData = useMemo(() => {
@@ -153,7 +159,7 @@ export default function UserDetailScreen() {
     p.displayName || p.fullName || p.name || t.profile.defaultName;
   const avatarUrl = p.avatarUrl;
   const age = p.age;
-  const gender = p.gender ? GENDER_LABELS[p.gender] || p.gender : null;
+  const gender = p.gender ? pick(GENDER_LABELS, p.gender) : null;
   const school = p.school;
   const occupation = p.occupation;
   const subInfo = [
@@ -167,6 +173,7 @@ export default function UserDetailScreen() {
   const bio = p.bio;
   const budget = p.budget;
   const formatBudget = (b: any) => {
+    //@ts-ignore
     if (!b || !b.min || !b.max) return t.profile.budgetHidden || "Đã ẩn";
     return `${formatVND(b.min)} - ${formatVND(b.max)}`;
   };
@@ -240,13 +247,6 @@ export default function UserDetailScreen() {
             title: t.profile.title,
             headerStyle: { backgroundColor: themeColors.card },
             headerTintColor: themeColors.text,
-            headerRight: () => (
-              <Pressable style={s.langBtn} onPress={toggleLanguage}>
-                <Text style={s.langText}>
-                  {language === "vi" ? "🇻🇳 VI" : "🇬🇧 EN"}
-                </Text>
-              </Pressable>
-            ),
           }}
         />
         <Text style={s.errorText}>{errorMsg || t.profile.notFound}</Text>
@@ -268,13 +268,6 @@ export default function UserDetailScreen() {
           headerStyle: { backgroundColor: themeColors.card },
           headerTintColor: themeColors.text,
           headerShadowVisible: false,
-          headerRight: () => (
-            <Pressable style={s.langBtn} onPress={toggleLanguage}>
-              <Text style={s.langText}>
-                {language === "vi" ? "🇻🇳 VI" : "🇬🇧 EN"}
-              </Text>
-            </Pressable>
-          ),
         }}
       />
 
@@ -319,7 +312,7 @@ export default function UserDetailScreen() {
             <Text style={s.warningText}>
               ⚠️ {t.profile.failedDealBreakers}{" "}
               {match.failedDealBreakers
-                .map((k: string) => CRITERIA_LABELS[k] || k)
+                .map((k: string) => pick(CRITERIA_LABELS, k))
                 .join(", ")}
             </Text>
           </View>
@@ -342,7 +335,7 @@ export default function UserDetailScreen() {
             {Object.entries(match.breakdown).map(([k, val]: any) => (
               <MatchBar
                 key={k}
-                label={CRITERIA_LABELS[k] || k}
+                label={pick(CRITERIA_LABELS, k)}
                 value={Number(val)}
               />
             ))}
@@ -359,15 +352,12 @@ export default function UserDetailScreen() {
             label={t.profile.preferredLocations}
             value={locations.length ? locations.join(", ") : null}
           />
-          <InfoRow
-            label={t.profile.budget}
-            value={budgetDisplay}
-          />
+          <InfoRow label={t.profile.budget} value={budgetDisplay} />
 
           {sched ? (
             <InfoRow
               label={t.profile.schedule}
-              value={`${t.profile.sleep} ${sched.sleepTime || "—"} · ${t.profile.wake} ${sched.wakeTime || "—"} (${PATTERN_LABELS[sched.pattern] || sched.pattern})`}
+              value={`${t.profile.sleep} ${sched.sleepTime || "—"} · ${t.profile.wake} ${sched.wakeTime || "—"} (${pick(PATTERN_LABELS, sched.pattern)})`}
             />
           ) : null}
 
@@ -392,13 +382,13 @@ export default function UserDetailScreen() {
           {l.guestFrequency ? (
             <InfoRow
               label={t.profile.guestFrequency}
-              value={GUEST_LABELS[l.guestFrequency] || l.guestFrequency}
+              value={pick(GUEST_LABELS, l.guestFrequency)}
             />
           ) : null}
           {l.sharedSpaceUsage ? (
             <InfoRow
               label={t.profile.sharedSpaceUsage}
-              value={SHARED_LABELS[l.sharedSpaceUsage] || l.sharedSpaceUsage}
+              value={pick(SHARED_LABELS, l.sharedSpaceUsage)}
             />
           ) : null}
           {l.smoking != null ? (
@@ -465,7 +455,9 @@ export default function UserDetailScreen() {
                 disabled={busyAction}
                 onPress={handleConnect}
               >
-                <Text style={s.buttonText}>{t.profile.acceptConnectionBtn}</Text>
+                <Text style={s.buttonText}>
+                  {t.profile.acceptConnectionBtn}
+                </Text>
               </Pressable>
             </View>
           ) : (
@@ -525,19 +517,6 @@ const s = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 24,
-  },
-  langBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: "#312e81",
-    borderWidth: 1,
-    borderColor: "#6366f1",
-  },
-  langText: {
-    color: "#f8fafc",
-    fontSize: 12,
-    fontWeight: "700",
   },
   card: {
     backgroundColor: themeColors.card,

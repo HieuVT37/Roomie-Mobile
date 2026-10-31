@@ -1,8 +1,8 @@
 import { Tabs } from "expo-router";
-import { Text, View, Pressable, StyleSheet } from "react-native";
+import { Text, View } from "react-native";
 import { AIChatButton } from "../../components/AIChat";
-import { useNotifications } from "../../context/NotificationContext";
 import { useLanguage } from "../../context/LanguageContext";
+import { useNotifications } from "../../context/NotificationContext";
 
 const themeColors = {
   bg: "#0f172a",
@@ -32,11 +32,6 @@ export default function TabsLayout() {
         // Gộp chung cả nút chuyển ngôn ngữ và nút AI Chat ở đây để không bị trùng lặp
         headerRight: () => (
           <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Pressable style={s.langBtn} onPress={toggleLanguage}>
-              <Text style={s.langText}>
-                {language === "vi" ? "🇻🇳 VI" : "🇬🇧 EN"}
-              </Text>
-            </Pressable>
             <AIChatButton />
           </View>
         ),
@@ -98,20 +93,3 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
-
-const s = StyleSheet.create({
-  langBtn: {
-    marginRight: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
-    backgroundColor: "#312e81",
-    borderWidth: 1,
-    borderColor: "#6366f1",
-  },
-  langText: {
-    color: "#f8fafc",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-});

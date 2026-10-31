@@ -3,37 +3,37 @@ import * as ImagePicker from "expo-image-picker";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Alert,
-  Image,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View,
+    Alert,
+    Image,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 import { addFavoriteApi, removeFavoriteApi } from "../../api/favorites";
 import {
-  deletePassApi,
-  getPassApi,
-  setPassStatusApi,
-  updatePassApi,
+    deletePassApi,
+    getPassApi,
+    setPassStatusApi,
+    updatePassApi,
 } from "../../api/pass";
 import { uploadImagesApi } from "../../api/uploads";
 import { useAuth } from "../../auth/AuthContext";
 import { MessageOwnerButton } from "../../components/MessageOwnerButton";
 import { Gallery, Loading, useBottomPad } from "../../components/ui";
 import {
-  CONDITION_LABELS,
-  DEAL_LABELS,
-  ITEM_CATEGORY_LABELS,
-  PASS_STATUS_LABELS,
-  PASS_TYPE_LABELS,
-  formatVND,
-  passPriceText,
+    CONDITION_LABELS,
+    DEAL_LABELS,
+    ITEM_CATEGORY_LABELS,
+    PASS_STATUS_LABELS,
+    PASS_TYPE_LABELS,
+    formatVND,
+    passPriceText,
 } from "../../utils/labels";
 
 const themeColors = {
@@ -204,37 +204,34 @@ export default function PassDetailScreen() {
       <View style={s.section}>
         <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
           <Text style={s.badge}>{(PASS_TYPE_LABELS as any)[l.type]}</Text>
-          {/* CHỈ HIỂN THỊ BADGE STATUS KHI ĐÃ ĐƯỢC DUYỆT */}
-          {l.moderationStatus === "approved" && (
-            <View
-              style={[
-                s.statusPill,
-                {
-                  backgroundColor:
-                    l.status === "active"
-                      ? "#064e3b"
-                      : l.status === "completed"
-                        ? "#312e81"
-                        : "#450a0a",
-                },
-              ]}
+          <View
+            style={[
+              s.statusPill,
+              {
+                backgroundColor:
+                  l.status === "active"
+                    ? "#064e3b"
+                    : l.status === "completed"
+                      ? "#312e81"
+                      : "#450a0a",
+              },
+            ]}
+          >
+            <Text
+              style={{
+                color:
+                  l.status === "active"
+                    ? "#6ee7b7"
+                    : l.status === "completed"
+                      ? "#a5b4fc"
+                      : "#fca5a5",
+                fontSize: 12,
+                fontWeight: "600",
+              }}
             >
-              <Text
-                style={{
-                  color:
-                    l.status === "active"
-                      ? "#6ee7b7"
-                      : l.status === "completed"
-                        ? "#a5b4fc"
-                        : "#fca5a5",
-                  fontSize: 12,
-                  fontWeight: "600",
-                }}
-              >
-                {(PASS_STATUS_LABELS as any)[l.status] || l.status}
-              </Text>
-            </View>
-          )}
+              {(PASS_STATUS_LABELS as any)[l.status] || l.status}
+            </Text>
+          </View>
           {!isOwner && (
             <Pressable onPress={toggleFavorite} style={{ marginLeft: "auto" }}>
               <Text style={{ fontSize: 26 }}>{fav ? "❤️" : "🤍"}</Text>
@@ -250,45 +247,6 @@ export default function PassDetailScreen() {
       {isOwner && (
         <View style={s.ownerCard}>
           <Text style={s.ownerCardTitle}>⚙️ Quản lý bài đăng của bạn</Text>
-          
-          {/* Hiển thị trạng thái kiểm duyệt */}
-          <View style={{ marginTop: 8, marginBottom: 8 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <View
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor:
-                    l.moderationStatus === "approved"
-                      ? "#22c55e"
-                      : l.moderationStatus === "rejected"
-                        ? "#ef4444"
-                        : "#f59e0b",
-                }}
-              />
-              <Text style={{ color: themeColors.muted, fontSize: 14 }}>
-                {l.moderationStatus === "approved"
-                  ? "Đã duyệt công khai"
-                  : l.moderationStatus === "rejected"
-                    ? "Bị từ chối"
-                    : "Chờ quản trị duyệt"}
-              </Text>
-            </View>
-            
-            {/* Hiển thị lý do từ chối nếu có */}
-            {l.moderationStatus === "rejected" && l.rejectionReason && (
-              <View style={{ backgroundColor: "#450a0a", borderWidth: 1, borderColor: themeColors.danger, borderRadius: 8, padding: 10, marginTop: 8 }}>
-                <Text style={{ color: "#fca5a5", fontSize: 12, fontWeight: "700", marginBottom: 4 }}>
-                  Lý do từ chối:
-                </Text>
-                <Text style={{ color: "#fca5a5", fontSize: 12, lineHeight: 18 }}>
-                  {l.rejectionReason}
-                </Text>
-              </View>
-            )}
-          </View>
-          
           <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
             <Pressable
               style={s.editButton}
@@ -306,45 +264,64 @@ export default function PassDetailScreen() {
             </Pressable>
           </View>
 
-          {/* Đổi trạng thái bài viết - CHỈ HIỂN THỊ KHI ĐÃ ĐƯỢC DUYỆT */}
-          {l.moderationStatus === "approved" && (
-            <View style={{ marginTop: 12, borderTopWidth: 1, borderColor: themeColors.border, paddingTop: 10 }}>
-              <Text style={{ color: themeColors.muted, fontSize: 13, marginBottom: 8 }}>
-                Thay đổi trạng thái bài viết:
-              </Text>
-              <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-                {l.status !== "completed" && (
-                  <Pressable
-                    style={s.statusActionBtn}
-                    disabled={busyAction}
-                    onPress={() => handleSetStatus("completed")}
+          {/* Đổi trạng thái bài viết */}
+          <View
+            style={{
+              marginTop: 12,
+              borderTopWidth: 1,
+              borderColor: themeColors.border,
+              paddingTop: 10,
+            }}
+          >
+            <Text
+              style={{
+                color: themeColors.muted,
+                fontSize: 13,
+                marginBottom: 8,
+              }}
+            >
+              Thay đổi trạng thái bài viết:
+            </Text>
+            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+              {l.status !== "completed" && (
+                <Pressable
+                  style={s.statusActionBtn}
+                  disabled={busyAction}
+                  onPress={() => handleSetStatus("completed")}
+                >
+                  <Text style={s.statusActionBtnText}>✓ Đã pass xong</Text>
+                </Pressable>
+              )}
+              {l.status !== "closed" && (
+                <Pressable
+                  style={s.statusActionBtn}
+                  disabled={busyAction}
+                  onPress={() => handleSetStatus("closed")}
+                >
+                  <Text style={s.statusActionBtnText}>✕ Đóng tin</Text>
+                </Pressable>
+              )}
+              {l.status !== "active" && (
+                <Pressable
+                  style={[
+                    s.statusActionBtn,
+                    { borderColor: themeColors.success },
+                  ]}
+                  disabled={busyAction}
+                  onPress={() => handleSetStatus("active")}
+                >
+                  <Text
+                    style={[
+                      s.statusActionBtnText,
+                      { color: themeColors.success },
+                    ]}
                   >
-                    <Text style={s.statusActionBtnText}>✓ Đã pass xong</Text>
-                  </Pressable>
-                )}
-                {l.status !== "closed" && (
-                  <Pressable
-                    style={s.statusActionBtn}
-                    disabled={busyAction}
-                    onPress={() => handleSetStatus("closed")}
-                  >
-                    <Text style={s.statusActionBtnText}>✕ Đóng tin</Text>
-                  </Pressable>
-                )}
-                {l.status !== "active" && (
-                  <Pressable
-                    style={[s.statusActionBtn, { borderColor: themeColors.success }]}
-                    disabled={busyAction}
-                    onPress={() => handleSetStatus("active")}
-                  >
-                    <Text style={[s.statusActionBtnText, { color: themeColors.success }]}>
-                      ↺ Mở lại bài đăng
-                    </Text>
-                  </Pressable>
-                )}
-              </View>
+                    ↺ Mở lại bài đăng
+                  </Text>
+                </Pressable>
+              )}
             </View>
-          )}
+          </View>
         </View>
       )}
 
@@ -393,11 +370,15 @@ export default function PassDetailScreen() {
           <>
             <CustomRow
               label="Danh mục"
-              value={(ITEM_CATEGORY_LABELS as any)[item.category] || item.category}
+              value={
+                (ITEM_CATEGORY_LABELS as any)[item.category] || item.category
+              }
             />
             <CustomRow
               label="Tình trạng"
-              value={(CONDITION_LABELS as any)[item.condition] || item.condition}
+              value={
+                (CONDITION_LABELS as any)[item.condition] || item.condition
+              }
             />
             <CustomRow
               label="Hình thức"
@@ -477,21 +458,14 @@ function EditPassModal({
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const [title, setTitle] = useState(initialListing.title || "");
-  const [description, setDescription] = useState(initialListing.description || "");
+  const [description, setDescription] = useState(
+    initialListing.description || "",
+  );
   const [price, setPrice] = useState(
     initialListing.price != null ? String(initialListing.price) : "",
   );
   const [area, setArea] = useState(initialListing.area || "");
-  const [contact, setContact] = useState(() => {
-    // Lấy số điện thoại từ nhiều nguồn có thể, ưu tiên theo thứ tự
-    const phone = 
-      initialListing.contact ||
-      initialListing.contactPhone || 
-      initialListing.phone ||
-      initialContact || 
-      "";
-    return String(phone || "");
-  });
+  const [contact, setContact] = useState(initialContact || "");
 
   // Room fields
   const [address, setAddress] = useState(room.address || "");
@@ -504,7 +478,9 @@ function EditPassModal({
   const [availableFrom, setAvailableFrom] = useState(
     room.availableFrom ? room.availableFrom.slice(0, 10) : "",
   );
-  const [landlordAgreed, setLandlordAgreed] = useState(Boolean(room.landlordAgreed));
+  const [landlordAgreed, setLandlordAgreed] = useState(
+    Boolean(room.landlordAgreed),
+  );
   const [transferTerms, setTransferTerms] = useState(room.transferTerms || "");
 
   // Item fields
@@ -514,13 +490,15 @@ function EditPassModal({
 
   // Images
   const [images, setImages] = useState<string[]>(initialListing.images || []);
-  const [newImageAssets, setNewImageAssets] = useState<ImagePicker.ImagePickerAsset[]>([]);
+  const [newImageAssets, setNewImageAssets] = useState<
+    ImagePicker.ImagePickerAsset[]
+  >([]);
   const [saving, setSaving] = useState(false);
 
   // Validation errors
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Validate form - validation đầy đủ
+  // Validate form
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
@@ -534,83 +512,33 @@ function EditPassModal({
         newErrors.title = "Tiêu đề không được quá 100 ký tự";
       }
 
-      if (!description.trim()) {
-        newErrors.description = "Vui lòng nhập mô tả phòng";
-      }
-
-      if (!price.trim()) {
-        newErrors.price = "Vui lòng nhập giá thuê";
-      } else if (isNaN(Number(price))) {
-        newErrors.price = "Giá thuê phải là số";
-      } else {
-        const priceNum = Number(price);
-        if (!Number.isInteger(priceNum)) {
-          newErrors.price = "Giá thuê phải là số nguyên";
-        } else if (priceNum <= 0) {
-          newErrors.price = "Giá thuê phải lớn hơn 0";
-        } else if (priceNum > 100000000) {
-          newErrors.price = "Giá thuê không hợp lệ (quá 100 triệu)";
-        }
-      }
-
-      if (!area.trim()) {
-        newErrors.area = "Vui lòng nhập khu vực";
-      }
-
-      if (!contact.trim()) {
-        newErrors.contact = "Vui lòng nhập số điện thoại liên hệ";
-      } else {
-        const phone = contact.trim().replace(/[\s\-]/g, "");
-        if (!/^0\d{9}$/.test(phone)) {
-          newErrors.contact = "Số điện thoại phải gồm 10 số và bắt đầu bằng 0";
-        }
-      }
-
       if (!address.trim()) {
-        newErrors.address = "Vui lòng nhập địa chỉ chi tiết phòng";
+        newErrors.address = "Vui lòng nhập địa chỉ phòng";
       }
 
-      if (!deposit.trim()) {
-        newErrors.deposit = "Vui lòng nhập tiền cọc";
-      } else if (isNaN(Number(deposit))) {
+      if (price && isNaN(Number(price))) {
+        newErrors.price = "Giá phải là số";
+      } else if (price && Number(price) < 0) {
+        newErrors.price = "Giá không được âm";
+      } else if (price && Number(price) > 100000000) {
+        newErrors.price = "Giá không hợp lệ (quá 100 triệu)";
+      }
+
+      if (deposit && isNaN(Number(deposit))) {
         newErrors.deposit = "Tiền cọc phải là số";
-      } else {
-        const depositNum = Number(deposit);
-        if (!Number.isInteger(depositNum)) {
-          newErrors.deposit = "Tiền cọc phải là số nguyên";
-        } else if (depositNum <= 0) {
-          newErrors.deposit = "Tiền cọc phải lớn hơn 0";
-        }
+      } else if (deposit && Number(deposit) < 0) {
+        newErrors.deposit = "Tiền cọc không được âm";
       }
 
       const leaseMonths = remainingLeaseMonths.trim();
       if (!leaseMonths) {
-        newErrors.remainingLeaseMonths = "Vui lòng nhập số tháng hợp đồng còn lại";
+        newErrors.remainingLeaseMonths =
+          "Vui lòng nhập số tháng hợp đồng còn lại";
       } else if (isNaN(Number(leaseMonths))) {
         newErrors.remainingLeaseMonths = "Số tháng phải là số";
-      } else {
-        const monthsNum = Number(leaseMonths);
-        if (!Number.isInteger(monthsNum)) {
-          newErrors.remainingLeaseMonths = "Số tháng phải là số nguyên";
-        } else if (monthsNum <= 0) {
-          newErrors.remainingLeaseMonths = "Số tháng phải lớn hơn 0";
-        } else if (monthsNum > 120) {
-          newErrors.remainingLeaseMonths = "Số tháng không được quá 120";
-        }
+      } else if (Number(leaseMonths) < 0 || Number(leaseMonths) > 120) {
+        newErrors.remainingLeaseMonths = "Số tháng phải từ 0 đến 120";
       }
-
-      if (!availableFrom.trim()) {
-        newErrors.availableFrom = "Vui lòng chọn ngày bàn giao";
-      }
-
-      if (!transferTerms.trim()) {
-        newErrors.transferTerms = "Vui lòng nhập điều khoản chuyển nhượng";
-      }
-
-      if (images.length + newImageAssets.length === 0) {
-        newErrors.images = "Vui lòng thêm ít nhất 1 hình ảnh phòng";
-      }
-
     } else {
       // Validate Pass Đồ
       if (!title.trim()) {
@@ -621,42 +549,14 @@ function EditPassModal({
         newErrors.title = "Tên món đồ không được quá 100 ký tự";
       }
 
-      if (!description.trim()) {
-        newErrors.description = "Vui lòng nhập mô tả món đồ";
-      }
-
       if (dealType !== "give_away") {
-        if (!price.trim()) {
-          newErrors.price = "Vui lòng nhập giá bán";
-        } else if (isNaN(Number(price))) {
-          newErrors.price = "Giá bán phải là số";
-        } else {
-          const priceNum = Number(price);
-          if (!Number.isInteger(priceNum)) {
-            newErrors.price = "Giá bán phải là số nguyên";
-          } else if (priceNum <= 0) {
-            newErrors.price = "Giá bán phải lớn hơn 0";
-          } else if (priceNum > 100000000) {
-            newErrors.price = "Giá bán không hợp lệ (quá 100 triệu)";
-          }
+        if (price && isNaN(Number(price))) {
+          newErrors.price = "Giá phải là số";
+        } else if (price && Number(price) < 0) {
+          newErrors.price = "Giá không được âm";
+        } else if (price && Number(price) > 100000000) {
+          newErrors.price = "Giá không hợp lệ (quá 100 triệu)";
         }
-      }
-
-      if (!area.trim()) {
-        newErrors.area = "Vui lòng nhập khu vực";
-      }
-
-      if (!contact.trim()) {
-        newErrors.contact = "Vui lòng nhập số điện thoại liên hệ";
-      } else {
-        const phone = contact.trim().replace(/[\s\-]/g, "");
-        if (!/^0\d{9}$/.test(phone)) {
-          newErrors.contact = "Số điện thoại phải gồm 10 số và bắt đầu bằng 0";
-        }
-      }
-
-      if (images.length + newImageAssets.length === 0) {
-        newErrors.images = "Vui lòng thêm ít nhất 1 hình ảnh món đồ";
       }
     }
 
@@ -666,7 +566,8 @@ function EditPassModal({
 
   // Scroll to first error
   const scrollToError = () => {
-    if (scrollRef.current) {//@ts-ignore
+    if (scrollRef.current) {
+      //@ts-ignore
       scrollRef.current.scrollTo({ y: 0, animated: true });
     }
   };
@@ -694,7 +595,9 @@ function EditPassModal({
       quality: 0.8,
     });
     if (!result.canceled) {
-      setNewImageAssets((prev) => [...prev, ...result.assets].slice(0, 8 - images.length));
+      setNewImageAssets((prev) =>
+        [...prev, ...result.assets].slice(0, 8 - images.length),
+      );
     }
   };
 
@@ -725,7 +628,9 @@ function EditPassModal({
                 : "image/jpeg";
           return {
             uri: asset.uri,
-            name: filename.endsWith(`.${ext}`) ? filename : `${filename}.${ext}`,
+            name: filename.endsWith(`.${ext}`)
+              ? filename
+              : `${filename}.${ext}`,
             type: mimeType,
           } as any;
         });
@@ -785,7 +690,7 @@ function EditPassModal({
       Alert.alert(
         "✅ Đã lưu thay đổi",
         "Bài viết đã được cập nhật và đang chờ quản trị viên duyệt lại. Sau khi được duyệt, thay đổi sẽ hiển thị công khai.",
-        [{ text: "Đồng ý", onPress: onSuccess }]
+        [{ text: "Đồng ý", onPress: onSuccess }],
       );
     } catch (err: any) {
       const errMsg =
@@ -799,7 +704,11 @@ function EditPassModal({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+    >
       <View style={{ flex: 1, backgroundColor: themeColors.bg }}>
         {/* Modal Header */}
         <View style={sModal.header}>
@@ -807,18 +716,41 @@ function EditPassModal({
             <Text style={{ color: themeColors.muted, fontSize: 16 }}>Hủy</Text>
           </Pressable>
           <Text style={sModal.headerTitle}>Chỉnh sửa bài Pass</Text>
-          <Pressable onPress={handleSave} disabled={saving} style={sModal.headerBtn}>
-            <Text style={{ color: themeColors.primary, fontSize: 16, fontWeight: "700" }}>
+          <Pressable
+            onPress={handleSave}
+            disabled={saving}
+            style={sModal.headerBtn}
+          >
+            <Text
+              style={{
+                color: themeColors.primary,
+                fontSize: 16,
+                fontWeight: "700",
+              }}
+            >
               {saving ? "Lưu..." : "Lưu"}
             </Text>
           </Pressable>
         </View>
-       {/* @ts-ignore*/}
-        <ScrollView ref={scrollRef} contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 60 }}>
+
+        <ScrollView
+          //@ts-ignore
+          ref={scrollRef}
+          contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 60 }}
+        >
           {/* Thông báo về kiểm duyệt */}
-          <View style={{ backgroundColor: "#1e3a8a", padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "#3b82f6" }}>
+          <View
+            style={{
+              backgroundColor: "#1e3a8a",
+              padding: 12,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: "#3b82f6",
+            }}
+          >
             <Text style={{ color: "#93c5fd", fontSize: 13, lineHeight: 20 }}>
-              ℹ️ <Text style={{ fontWeight: "700" }}>Lưu ý:</Text> Mọi chỉnh sửa cần được quản trị viên duyệt lại trước khi hiển thị công khai.
+              ℹ️ <Text style={{ fontWeight: "700" }}>Lưu ý:</Text> Mọi chỉnh sửa
+              cần được quản trị viên duyệt lại trước khi hiển thị công khai.
             </Text>
           </View>
 
@@ -827,7 +759,13 @@ function EditPassModal({
             <Text style={sModal.cardTitle}>Thông tin chính</Text>
             <Text style={sModal.label}>Tiêu đề *</Text>
             <TextInput
-              style={[sModal.input, errors.title && { borderColor: themeColors.danger, borderWidth: 1 }]}
+              style={[
+                sModal.input,
+                errors.title && {
+                  borderColor: themeColors.danger,
+                  borderWidth: 1,
+                },
+              ]}
               value={title}
               onChangeText={(val) => {
                 if (errors.title) setErrors((prev) => ({ ...prev, title: "" }));
@@ -849,10 +787,21 @@ function EditPassModal({
             />
 
             <Text style={sModal.label}>
-              {isRoom ? "Giá thuê (VNĐ/tháng)" : dealType === "give_away" ? "Giá (0đ - Cho tặng)" : "Giá (VNĐ)"}
+              {isRoom
+                ? "Giá thuê (VNĐ/tháng)"
+                : dealType === "give_away"
+                  ? "Giá (0đ - Cho tặng)"
+                  : "Giá (VNĐ)"}
             </Text>
             <TextInput
-              style={[sModal.input, !isRoom && dealType === "give_away" && { opacity: 0.6 }, errors.price && { borderColor: themeColors.danger, borderWidth: 1 }]}
+              style={[
+                sModal.input,
+                !isRoom && dealType === "give_away" && { opacity: 0.6 },
+                errors.price && {
+                  borderColor: themeColors.danger,
+                  borderWidth: 1,
+                },
+              ]}
               value={!isRoom && dealType === "give_away" ? "0" : price}
               onChangeText={(val) => {
                 if (errors.price) setErrors((prev) => ({ ...prev, price: "" }));
@@ -890,10 +839,17 @@ function EditPassModal({
               <Text style={sModal.cardTitle}>Thông tin phòng</Text>
               <Text style={sModal.label}>Địa chỉ phòng *</Text>
               <TextInput
-                style={[sModal.input, errors.address && { borderColor: themeColors.danger, borderWidth: 1 }]}
+                style={[
+                  sModal.input,
+                  errors.address && {
+                    borderColor: themeColors.danger,
+                    borderWidth: 1,
+                  },
+                ]}
                 value={address}
                 onChangeText={(val) => {
-                  if (errors.address) setErrors((prev) => ({ ...prev, address: "" }));
+                  if (errors.address)
+                    setErrors((prev) => ({ ...prev, address: "" }));
                   setAddress(val);
                 }}
                 placeholder="Địa chỉ chi tiết..."
@@ -903,10 +859,17 @@ function EditPassModal({
 
               <Text style={sModal.label}>Tiền cọc (VNĐ)</Text>
               <TextInput
-                style={[sModal.input, errors.deposit && { borderColor: themeColors.danger, borderWidth: 1 }]}
+                style={[
+                  sModal.input,
+                  errors.deposit && {
+                    borderColor: themeColors.danger,
+                    borderWidth: 1,
+                  },
+                ]}
                 value={deposit}
                 onChangeText={(val) => {
-                  if (errors.deposit) setErrors((prev) => ({ ...prev, deposit: "" }));
+                  if (errors.deposit)
+                    setErrors((prev) => ({ ...prev, deposit: "" }));
                   setDeposit(val);
                 }}
                 keyboardType="numeric"
@@ -915,12 +878,24 @@ function EditPassModal({
               />
               <ErrorText field="deposit" />
 
-              <Text style={sModal.label}>Số tháng hợp đồng còn lại (0 - 120) *</Text>
+              <Text style={sModal.label}>
+                Số tháng hợp đồng còn lại (0 - 120) *
+              </Text>
               <TextInput
-                style={[sModal.input, errors.remainingLeaseMonths && { borderColor: themeColors.danger, borderWidth: 1 }]}
+                style={[
+                  sModal.input,
+                  errors.remainingLeaseMonths && {
+                    borderColor: themeColors.danger,
+                    borderWidth: 1,
+                  },
+                ]}
                 value={remainingLeaseMonths}
                 onChangeText={(val) => {
-                  if (errors.remainingLeaseMonths) setErrors((prev) => ({ ...prev, remainingLeaseMonths: "" }));
+                  if (errors.remainingLeaseMonths)
+                    setErrors((prev) => ({
+                      ...prev,
+                      remainingLeaseMonths: "",
+                    }));
                   setRemainingLeaseMonths(val);
                 }}
                 keyboardType="numeric"
@@ -934,8 +909,12 @@ function EditPassModal({
                 style={sModal.input}
                 onPress={() => setShowDatePicker(true)}
               >
-                <Text style={{ color: availableFrom ? themeColors.text : "#64748b" }}>
-                  {availableFrom 
+                <Text
+                  style={{
+                    color: availableFrom ? themeColors.text : "#64748b",
+                  }}
+                >
+                  {availableFrom
                     ? new Date(availableFrom).toLocaleDateString("vi-VN")
                     : "Chọn ngày bàn giao"}
                 </Text>
@@ -948,7 +927,9 @@ function EditPassModal({
                   onChange={(event, selectedDate) => {
                     setShowDatePicker(Platform.OS === "ios");
                     if (selectedDate) {
-                      const formatted = selectedDate.toISOString().split("T")[0];
+                      const formatted = selectedDate
+                        .toISOString()
+                        .split("T")[0];
                       setAvailableFrom(formatted);
                     }
                   }}
@@ -956,7 +937,13 @@ function EditPassModal({
               )}
 
               <View style={sModal.switchRow}>
-                <Text style={{ color: themeColors.text, fontWeight: "600", flex: 1 }}>
+                <Text
+                  style={{
+                    color: themeColors.text,
+                    fontWeight: "600",
+                    flex: 1,
+                  }}
+                >
                   Chủ nhà đã đồng ý cho chuyển nhượng
                 </Text>
                 <Switch
@@ -986,10 +973,18 @@ function EditPassModal({
                 {CATEGORY_OPTIONS.map((opt) => (
                   <Pressable
                     key={opt.key}
-                    style={[sModal.chip, category === opt.key && sModal.chipActive]}
+                    style={[
+                      sModal.chip,
+                      category === opt.key && sModal.chipActive,
+                    ]}
                     onPress={() => setCategory(opt.key)}
                   >
-                    <Text style={[sModal.chipText, category === opt.key && sModal.chipTextActive]}>
+                    <Text
+                      style={[
+                        sModal.chipText,
+                        category === opt.key && sModal.chipTextActive,
+                      ]}
+                    >
                       {opt.label}
                     </Text>
                   </Pressable>
@@ -1001,10 +996,18 @@ function EditPassModal({
                 {CONDITION_OPTIONS.map((opt) => (
                   <Pressable
                     key={opt.key}
-                    style={[sModal.chip, condition === opt.key && sModal.chipActive]}
+                    style={[
+                      sModal.chip,
+                      condition === opt.key && sModal.chipActive,
+                    ]}
                     onPress={() => setCondition(opt.key)}
                   >
-                    <Text style={[sModal.chipText, condition === opt.key && sModal.chipTextActive]}>
+                    <Text
+                      style={[
+                        sModal.chipText,
+                        condition === opt.key && sModal.chipTextActive,
+                      ]}
+                    >
                       {opt.label}
                     </Text>
                   </Pressable>
@@ -1016,10 +1019,18 @@ function EditPassModal({
                 {DEAL_OPTIONS.map((opt) => (
                   <Pressable
                     key={opt.key}
-                    style={[sModal.chip, dealType === opt.key && sModal.chipActive]}
+                    style={[
+                      sModal.chip,
+                      dealType === opt.key && sModal.chipActive,
+                    ]}
                     onPress={() => setDealType(opt.key)}
                   >
-                    <Text style={[sModal.chipText, dealType === opt.key && sModal.chipTextActive]}>
+                    <Text
+                      style={[
+                        sModal.chipText,
+                        dealType === opt.key && sModal.chipTextActive,
+                      ]}
+                    >
                       {opt.label}
                     </Text>
                   </Pressable>
@@ -1030,19 +1041,38 @@ function EditPassModal({
 
           {/* Quản lý ảnh */}
           <View style={sModal.card}>
-            <Text style={sModal.cardTitle}>Hình ảnh ({images.length + newImageAssets.length}/8)</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginTop: 10 }}>
+            <Text style={sModal.cardTitle}>
+              Hình ảnh ({images.length + newImageAssets.length}/8)
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8, marginTop: 10 }}
+            >
               <Pressable style={sModal.uploadBox} onPress={pickMoreImages}>
-                <Text style={{ color: themeColors.primary, fontSize: 24 }}>+</Text>
-                <Text style={{ color: themeColors.muted, fontSize: 11 }}>Thêm ảnh</Text>
+                <Text style={{ color: themeColors.primary, fontSize: 24 }}>
+                  +
+                </Text>
+                <Text style={{ color: themeColors.muted, fontSize: 11 }}>
+                  Thêm ảnh
+                </Text>
               </Pressable>
 
               {/* Ảnh hiện có */}
               {images.map((url, i) => (
                 <View key={`exist-${i}`} style={sModal.imgBox}>
                   <Image source={{ uri: url }} style={sModal.img} />
-                  <Pressable style={sModal.delBadge} onPress={() => setImages((prev) => prev.filter((_, idx) => idx !== i))}>
-                    <Text style={{ color: "#fff", fontSize: 10, fontWeight: "700" }}>✕</Text>
+                  <Pressable
+                    style={sModal.delBadge}
+                    onPress={() =>
+                      setImages((prev) => prev.filter((_, idx) => idx !== i))
+                    }
+                  >
+                    <Text
+                      style={{ color: "#fff", fontSize: 10, fontWeight: "700" }}
+                    >
+                      ✕
+                    </Text>
                   </Pressable>
                 </View>
               ))}
@@ -1051,8 +1081,19 @@ function EditPassModal({
               {newImageAssets.map((asset, i) => (
                 <View key={`new-${i}`} style={sModal.imgBox}>
                   <Image source={{ uri: asset.uri }} style={sModal.img} />
-                  <Pressable style={sModal.delBadge} onPress={() => setNewImageAssets((prev) => prev.filter((_, idx) => idx !== i))}>
-                    <Text style={{ color: "#fff", fontSize: 10, fontWeight: "700" }}>✕</Text>
+                  <Pressable
+                    style={sModal.delBadge}
+                    onPress={() =>
+                      setNewImageAssets((prev) =>
+                        prev.filter((_, idx) => idx !== i),
+                      )
+                    }
+                  >
+                    <Text
+                      style={{ color: "#fff", fontSize: 10, fontWeight: "700" }}
+                    >
+                      ✕
+                    </Text>
                   </Pressable>
                 </View>
               ))}
@@ -1060,8 +1101,14 @@ function EditPassModal({
           </View>
 
           {/* Nút lưu */}
-          <Pressable style={[sModal.saveBtn, saving && { opacity: 0.6 }]} disabled={saving} onPress={handleSave}>
-            <Text style={sModal.saveBtnText}>{saving ? "Đang lưu thay đổi..." : "Lưu thay đổi bài đăng"}</Text>
+          <Pressable
+            style={[sModal.saveBtn, saving && { opacity: 0.6 }]}
+            disabled={saving}
+            onPress={handleSave}
+          >
+            <Text style={sModal.saveBtnText}>
+              {saving ? "Đang lưu thay đổi..." : "Lưu thay đổi bài đăng"}
+            </Text>
           </Pressable>
         </ScrollView>
       </View>
@@ -1267,42 +1314,42 @@ const sModal = StyleSheet.create({
     marginTop: 4,
   },
   chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
     backgroundColor: themeColors.bg,
     borderWidth: 1,
     borderColor: themeColors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
   chipActive: {
     backgroundColor: themeColors.primary,
     borderColor: themeColors.primary,
   },
   chipText: {
-    fontSize: 12,
-    color: themeColors.text,
-    fontWeight: "600",
+    color: themeColors.muted,
+    fontSize: 13,
   },
   chipTextActive: {
     color: "#fff",
+    fontWeight: "600",
   },
   uploadBox: {
-    width: 90,
-    height: 90,
+    width: 70,
+    height: 70,
     backgroundColor: themeColors.bg,
-    borderWidth: 2,
+    borderWidth: 1,
+    borderColor: themeColors.primary,
     borderStyle: "dashed",
-    borderColor: themeColors.border,
-    borderRadius: 12,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
   imgBox: {
-    width: 90,
-    height: 90,
-    position: "relative",
-    borderRadius: 12,
+    width: 70,
+    height: 70,
+    borderRadius: 10,
     overflow: "hidden",
+    position: "relative",
   },
   img: {
     width: "100%",
@@ -1310,33 +1357,25 @@ const sModal = StyleSheet.create({
   },
   delBadge: {
     position: "absolute",
-    top: 4,
-    right: 4,
-    width: 20,
-    height: 20,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    borderRadius: 10,
+    top: 3,
+    right: 3,
+    backgroundColor: themeColors.danger,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
   },
   saveBtn: {
     backgroundColor: themeColors.primary,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
     borderRadius: 12,
+    paddingVertical: 14,
     alignItems: "center",
-    justifyContent: "center",
-    marginTop: 8,
-    shadowColor: themeColors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    marginBottom: 20,
   },
   saveBtnText: {
     color: "#fff",
-    fontSize: 17,
     fontWeight: "700",
-    letterSpacing: 0.5,
+    fontSize: 16,
   },
 });

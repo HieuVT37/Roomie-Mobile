@@ -181,9 +181,13 @@ export function Gallery({
   height?: number;
 }) {
   const [width, setWidth] = useState(0);
-  const frameHeight = Number.isFinite(height) ? Math.max(180, Math.min(height, 320)) : 240;
+  const frameHeight = Number.isFinite(height)
+    ? Math.max(180, Math.min(height, 320))
+    : 240;
   const validImages = Array.isArray(images)
-    ? images.filter((uri): uri is string => typeof uri === "string" && Boolean(uri.trim()))
+    ? images.filter(
+        (uri): uri is string => typeof uri === "string" && Boolean(uri.trim()),
+      )
     : [];
 
   return (
@@ -203,14 +207,28 @@ export function Gallery({
           emoji={emoji}
         />
       ) : (
-        <ListingImage uri={validImages[0]} emoji={emoji} style={{ height: frameHeight }} />
+        <ListingImage
+          uri={validImages[0]}
+          emoji={emoji}
+          style={{ height: frameHeight }}
+        />
       )}
     </View>
   );
 }
 
 // Remount when the image set or page dimensions change, resetting offset and counter together.
-function GalleryPages({ images, width, height, emoji }: { images: string[]; width: number; height: number; emoji: string }) {
+function GalleryPages({
+  images,
+  width,
+  height,
+  emoji,
+}: {
+  images: string[];
+  width: number;
+  height: number;
+  emoji: string;
+}) {
   const [index, setIndex] = useState(0);
   return (
     <>
@@ -223,10 +241,22 @@ function GalleryPages({ images, width, height, emoji }: { images: string[]; widt
         initialNumToRender={2}
         maxToRenderPerBatch={2}
         windowSize={3}
-        getItemLayout={(_, itemIndex) => ({ length: width, offset: width * itemIndex, index: itemIndex })}
+        getItemLayout={(_, itemIndex) => ({
+          length: width,
+          offset: width * itemIndex,
+          index: itemIndex,
+        })}
         scrollEventThrottle={16}
         onScroll={(event) =>
-          setIndex(Math.max(0, Math.min(images.length - 1, Math.round(event.nativeEvent.contentOffset.x / width))))
+          setIndex(
+            Math.max(
+              0,
+              Math.min(
+                images.length - 1,
+                Math.round(event.nativeEvent.contentOffset.x / width),
+              ),
+            ),
+          )
         }
         renderItem={({ item }) => (
           <ListingImage uri={item} emoji={emoji} style={{ width, height }} />
@@ -241,7 +271,8 @@ function GalleryPages({ images, width, height, emoji }: { images: string[]; widt
   );
 }
 
-// Thanh chọn mục ngang dạng khung chữ nhật bo góc viền tím sáng (Duy nhất 1 Segments)
+// Thanh chọn mục ngang dạng khung chữ nhật bo góc viền tím sáng.
+// Hỗ trợ badge (số lượng) hoặc dot (chấm) ở góc trên bên phải mỗi nút.
 export function Segments({
   value,
   onChange,
@@ -249,22 +280,39 @@ export function Segments({
 }: {
   value: string;
   onChange: (v: string) => void;
-  options: { key: string; label: string; dot?: boolean }[];
+  options: { key: string; label: string; dot?: boolean; badge?: number }[];
 }) {
   return (
     <View style={sSegments.container}>
       {options.map((opt) => {
         const active = value === opt.key;
+        const count = opt.badge || 0;
         return (
           <Pressable
             key={opt.key}
             style={[sSegments.tab, active && sSegments.activeTab]}
             onPress={() => onChange(opt.key)}
           >
-            <Text style={[sSegments.text, active && sSegments.activeText]}>
+            <Text
+              style={[sSegments.text, active && sSegments.activeText]}
+              numberOfLines={1}
+            >
               {opt.label}
             </Text>
-            {opt.dot && <View style={sSegments.dot} />}
+            {count > 0 ? (
+              <View style={[sSegments.badge, active && sSegments.badgeActive]}>
+                <Text
+                  style={[
+                    sSegments.badgeText,
+                    active && sSegments.badgeTextActive,
+                  ]}
+                >
+                  {count > 99 ? "99+" : count}
+                </Text>
+              </View>
+            ) : opt.dot ? (
+              <View style={[sSegments.dot, active && sSegments.dotActive]} />
+            ) : null}
           </Pressable>
         );
       })}
@@ -377,11 +425,12 @@ const sSegments = StyleSheet.create({
     borderColor: colors.primary,
     margin: 12,
     padding: 4,
-    overflow: "hidden",
+    // Không dùng overflow: "hidden" để badge không bị cắt
   },
   tab: {
     flex: 1,
     paddingVertical: 10,
+    paddingHorizontal: 2,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,
@@ -398,13 +447,47 @@ const sSegments = StyleSheet.create({
     color: "#ffffff",
     fontWeight: "700",
   },
+  // Chấm tròn có số, màu tím giống badge ở tab Tin nhắn
+  badge: {
+    position: "absolute",
+    top: -2,
+    right: 0,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: colors.primary,
+    borderWidth: 1.5,
+    borderColor: colors.card,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  // Khi nút đang chọn (nền tím) thì badge đổi sang nền trắng để vẫn nổi bật
+  badgeActive: {
+    backgroundColor: "#ffffff",
+    borderColor: colors.primary,
+  },
+  badgeText: {
+    color: "#ffffff",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  badgeTextActive: {
+    color: colors.primary,
+  },
   dot: {
     position: "absolute",
-    top: 6,
-    right: 10,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.danger,
+    top: 4,
+    right: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+    borderWidth: 1.5,
+    borderColor: colors.card,
+  },
+  dotActive: {
+    backgroundColor: "#ffffff",
+    borderColor: colors.primary,
   },
 });

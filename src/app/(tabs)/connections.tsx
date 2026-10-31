@@ -2,42 +2,46 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    Alert,
-    FlatList,
-    Pressable,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  Alert,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import {
-    acceptApi,
-    cancelApi,
-    connectionSummaryApi,
-    disconnectApi,
-    listConnectionsApi,
-    markSeenApi,
-    rejectApi,
-    sendRequestApi,
+  acceptApi,
+  cancelApi,
+  connectionSummaryApi,
+  disconnectApi,
+  listConnectionsApi,
+  markSeenApi,
+  rejectApi,
+  sendRequestApi,
 } from "../../api/connections";
 import { startConversationApi } from "../../api/conversations";
 import { listMatchesApi } from "../../api/matching";
 import { useAuth } from "../../auth/AuthContext";
 import {
-    Avatar,
-    Chip,
-    Loading,
-    LoginPrompt,
-    Segments,
-    shared,
+  Avatar,
+  Chip,
+  Loading,
+  LoginPrompt,
+  Segments,
+  shared,
 } from "../../components/ui";
 import { useNotifications } from "../../context/NotificationContext";
 import {
-    useInfiniteList,
-    useTabPressScrollTop,
+  useInfiniteList,
+  useTabPressScrollTop,
 } from "../../hooks/use-infinite-list";
-import { GENDER_LABELS, formatBudget, normalizeVietnamese } from "../../utils/labels";
+import {
+  GENDER_LABELS,
+  formatBudget,
+  normalizeVietnamese,
+} from "../../utils/labels";
 
 // Tông màu chủ đạo Dark Theme (Tím / Xanh đen)
 const themeColors = {
@@ -80,11 +84,7 @@ export default function ConnectionsScreen() {
         onChange={setTab}
         options={[
           { key: "match", label: "Gợi ý" },
-          {
-            key: "received",
-            label: `Nhận được${summary?.receivedPending ? ` (${summary.receivedPending})` : ""}`,
-            dot: u.received > 0,
-          },
+          { key: "received", label: "Yêu cầu", dot: u.received > 0 },
           { key: "sent", label: "Đã gửi", dot: u.sent > 0 },
           { key: "accepted", label: "Đã kết nối", dot: u.accepted > 0 },
         ]}
@@ -201,7 +201,11 @@ function MatchList() {
           />
           {isSearching && (
             <View style={{ padding: 4 }}>
-              <Ionicons name="hourglass-outline" size={18} color={themeColors.primary} />
+              <Ionicons
+                name="hourglass-outline"
+                size={18}
+                color={themeColors.primary}
+              />
             </View>
           )}
           {text.length > 0 && !isSearching && (
@@ -216,7 +220,6 @@ function MatchList() {
         </View>
       </View>
 
-      
       {list.loading && !q ? (
         <Loading text="Đang tìm người phù hợp..." />
       ) : (
@@ -348,9 +351,13 @@ function MatchList() {
                   </View>
                 </Pressable>
                 {status === "accepted" ? (
-                  <Text style={s.state}>Đã kết nối</Text>
+                  <View style={[s.primaryButton, s.disabledButton]}>
+                    <Text style={s.buttonText}>Đã kết nối</Text>
+                  </View>
                 ) : status === "sent" ? (
-                  <Text style={s.state}>Đã gửi yêu cầu</Text>
+                  <View style={[s.primaryButton, s.disabledButton]}>
+                    <Text style={s.buttonText}>Đã gửi yêu cầu</Text>
+                  </View>
                 ) : status === "received" ? (
                   <Text style={s.state}>
                     Người này muốn kết nối với bạn (xem ở mục Nhận được)
@@ -638,8 +645,8 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginHorizontal: 12,
-    marginTop: 12,
-    marginBottom: 8,
+    marginTop: 0,
+    marginBottom: 12,
     gap: 8,
   },
   searchBar: {
@@ -755,6 +762,12 @@ const s = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
+  },
+  disabledButton: {
+    backgroundColor: "#312e81",
+    borderWidth: 1,
+    borderColor: themeColors.primary,
+    opacity: 0.85,
   },
   outlineButton: {
     backgroundColor: "transparent",
