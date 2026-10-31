@@ -37,17 +37,15 @@ export default function FavoritesScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Thanh Segments chuyển đổi tab */}
-      <View style={styles.segmentWrapper}>
-        <Segments
-          value={type}
-          onChange={setType}
-          options={[
-            { key: "accommodation", label: "Phòng trọ" },
-            { key: "pass", label: "Pass" },
-          ]}
-        />
-      </View>
+      {/* Filter đặt trực tiếp trên nền trang, tách khỏi banner (giống màn Pass) */}
+      <Segments
+        value={type}
+        onChange={setType}
+        options={[
+          { key: "accommodation", label: "Phòng trọ" },
+          { key: "pass", label: "Pass" },
+        ]}
+      />
 
       {loading ? (
         <Loading text="Đang tải..." />
@@ -100,13 +98,7 @@ export default function FavoritesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0f172a", // Nền tím/xanh đậm chủ đạo
-  },
-  segmentWrapper: {
-    backgroundColor: "#1e293b",
-    borderBottomWidth: 1,
-    borderBottomColor: "#334155",
-    paddingVertical: 8,
+    backgroundColor: "#0f172a",
   },
   emptyContainer: {
     alignItems: "center",

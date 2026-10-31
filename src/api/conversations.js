@@ -4,7 +4,11 @@ const d = (r) => r.data;
 
 export const listConversationsApi = () => api.get("/conversations").then(d);
 export const getMessagesApi = (id, since) =>
-  api.get(`/conversations/${id}/messages`, { params: since ? { since } : {} }).then(d);
+  api
+    .get(`/conversations/${id}/messages`, { params: since ? { since } : {} })
+    .then(d);
+export const deleteConversationApi = (id) =>
+  api.delete(`/conversations/${id}`).then((r) => r.data);
 
 // files: [{ uri, name, type }]. Trên điện thoại, FormData nhận đối tượng { uri, name, type } thay cho File của trình duyệt
 export const sendMessageApi = (id, text, files = []) => {
@@ -21,4 +25,5 @@ export const sendMessageApi = (id, text, files = []) => {
   }
   return api.post(`/conversations/${id}/messages`, { text }).then(d);
 };
-export const startConversationApi = (userId) => api.post("/conversations/start", { userId }).then(d);
+export const startConversationApi = (userId) =>
+  api.post("/conversations/start", { userId }).then(d);

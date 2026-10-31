@@ -65,7 +65,7 @@ const hhmm = (iso: string) => {
 export default function ChatScreen() {
   const { id, name } = useLocalSearchParams<{ id: string; name?: string }>();
   const { user, profile } = useAuth();
-  const { language, toggleLanguage, t } = useLanguage();
+  const { t } = useLanguage();
   const { refresh: refreshNotifications } = useNotifications();
   const insets = useSafeAreaInsets();
   const keyboardVisible = useKeyboardVisible();
@@ -127,8 +127,7 @@ export default function ChatScreen() {
         if (initial || data.messages.length) refreshNotifications();
         setError("");
       } catch (err: any) {
-        if (initial)
-          setError(err.response?.data?.message || t.chat.loadError);
+        if (initial) setError(err.response?.data?.message || t.chat.loadError);
       }
     },
     [id, merge, refreshNotifications, t.chat.loadError],
@@ -154,7 +153,7 @@ export default function ChatScreen() {
     setPicked((prev) => [...prev, ...res.assets].slice(0, 4));
   };
 
-  // 3. Gửi tin nhắn: Tải tối đa 4 ảnh lên Firebase Storage -> Ghi vào Firestore + Đồng bộ Backend API
+  // 3. Gửi tin nhắn
   const send = async () => {
     const body = text.trim();
     if ((!body && !picked.length) || sending) return;
@@ -177,16 +176,14 @@ export default function ChatScreen() {
         type: a.mimeType || "image/jpeg",
       }));
 
-      // Gửi lên Backend API để lưu lịch sử và cập nhật badge thông báo
       const { message } = await sendMessageApi(id, body, files);
       const finalImages =
         firebaseImageUrls.length > 0
           ? firebaseImageUrls
           : message?.images || [];
 
-      // Ghi đồng thời vào Firestore để cập nhật realtime tức thì
       if (isFirebaseConfigured && user) {
-        // KHÔNG await: setDoc có thể treo vô hạn (offline / rules chặn) và làm nút Gửi bị kẹt ở trạng thái "..."
+        // KHÔNG await: setDoc có thể treo vô hạn (offline / rules chặn)
         sendFirestoreMessage(id, {
           senderId: user.id || user._id,
           senderName: profile?.displayName || user.email || "Roomie",
@@ -208,28 +205,33 @@ export default function ChatScreen() {
     }
   };
 
-  if (loading) return <Loading text={t.chat.loadingMessages} />;
+  // Header đặt ngoài để luôn hiện tiêu đề, kể cả lúc đang tải
+  const header = (
+    <Stack.Screen
+      options={{
+        title: name || t.chat.defaultTitle,
+        headerStyle: { backgroundColor: themeColors.card },
+        headerTintColor: themeColors.text,
+        headerShadowVisible: false,
+        headerRight: () => null,
+      }}
+    />
+  );
+
+  if (loading)
+    return (
+      <>
+        {header}
+        <Loading text={t.chat.loadingMessages} />
+      </>
+    );
 
   const data = [...messages].reverse();
 
   return (
     <View style={{ flex: 1, backgroundColor: themeColors.bg }}>
+      {header}
       <KeyboardScreen>
-        <Stack.Screen
-          options={{
-            title: name || t.chat.defaultTitle,
-            headerStyle: { backgroundColor: themeColors.card },
-            headerTintColor: themeColors.text,
-            headerShadowVisible: false,
-            headerRight: () => (
-              <Pressable style={s.langBtn} onPress={toggleLanguage}>
-                <Text style={s.langText}>
-                  {language === "vi" ? "🇻🇳 VI" : "🇬🇧 EN"}
-                </Text>
-              </Pressable>
-            ),
-          }}
-        />
         <FlatList
           style={{ flex: 1, backgroundColor: themeColors.bg }}
           data={data}
@@ -239,9 +241,7 @@ export default function ChatScreen() {
           keyboardDismissMode="interactive"
           contentContainerStyle={{ padding: 12, gap: 6 }}
           ListEmptyComponent={
-            <Text style={[s.empty, { transform: [{ scaleY: -1 }] }]}>
-              {error || t.chat.emptyPrompt}
-            </Text>
+            <Text style={s.empty}>{error || t.chat.emptyPrompt}</Text>
           }
           renderItem={({ item: m }) => {
             const mine = String(m.senderId) === String(user?.id || user?._id);
@@ -255,7 +255,8 @@ export default function ChatScreen() {
                       source={{
                         uri: fullUri,
                         headers:
-                          token && !fullUri.includes("firebasestorage.googleapis.com")
+                          token &&
+                          !fullUri.includes("firebasestorage.googleapis.com")
                             ? { Authorization: `Bearer ${token}` }
                             : undefined,
                       }}
@@ -368,19 +369,6 @@ export default function ChatScreen() {
 }
 
 const s = StyleSheet.create({
-  langBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: "#312e81",
-    borderWidth: 1,
-    borderColor: "#6366f1",
-  },
-  langText: {
-    color: "#f8fafc",
-    fontSize: 12,
-    fontWeight: "700",
-  },
   bubble: {
     maxWidth: "80%",
     borderRadius: 16,

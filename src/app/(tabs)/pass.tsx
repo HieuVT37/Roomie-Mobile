@@ -4,37 +4,37 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    Alert,
-    FlatList,
-    Image,
-    Platform,
-    Pressable,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    View,
+  Alert,
+  FlatList,
+  Image,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import {
-    createPassApi,
-    deletePassApi,
-    listPassApi,
-    myPassApi,
+  createPassApi,
+  deletePassApi,
+  listPassApi,
+  myPassApi,
 } from "../../api/pass";
 import { uploadImagesApi } from "../../api/uploads";
 import { PassCard } from "../../components/cards";
 import { Loading, Segments, shared } from "../../components/ui";
 import {
-    useInfiniteList,
-    useTabPressScrollTop,
+  useInfiniteList,
+  useTabPressScrollTop,
 } from "../../hooks/use-infinite-list";
 import {
-    CONDITION_LABELS,
-    DEAL_LABELS,
-    ITEM_CATEGORY_LABELS,
-    normalizeVietnamese,
+  CONDITION_LABELS,
+  DEAL_LABELS,
+  ITEM_CATEGORY_LABELS,
+  normalizeVietnamese,
 } from "../../utils/labels";
 
 const themeColors = {
@@ -271,7 +271,11 @@ export default function PassListScreen() {
                   />
                   {isSearching && (
                     <View style={{ padding: 4 }}>
-                      <Ionicons name="hourglass-outline" size={18} color={themeColors.primary} />
+                      <Ionicons
+                        name="hourglass-outline"
+                        size={18}
+                        color={themeColors.primary}
+                      />
                     </View>
                   )}
                   {text.length > 0 && !isSearching && (
@@ -285,8 +289,6 @@ export default function PassListScreen() {
                   )}
                 </View>
               </View>
-
-              
             </View>
           )}
           {list.loading && !q ? (
@@ -320,7 +322,9 @@ export default function PassListScreen() {
                   <Text style={[shared.empty, { textAlign: "center" }]}>
                     {list.error ||
                       (q
-                        ? (tab === "room" ? `Không tìm thấy phòng ở khu vực "${q}".` : `Không tìm thấy món đồ nào có tên "${q}".`)
+                        ? tab === "room"
+                          ? `Không tìm thấy phòng ở khu vực "${q}".`
+                          : `Không tìm thấy món đồ nào có tên "${q}".`
                         : tab === "mine"
                           ? "Bạn chưa đăng bài nào."
                           : tab === "room"
@@ -492,13 +496,13 @@ function CreatePassForm({
 
       const leaseMonths = roomForm.remainingLeaseMonths.trim();
       if (!leaseMonths) {
-        newErrors.remainingLeaseMonths = "Vui lòng nhập số tháng hợp đồng còn lại";
+        newErrors.remainingLeaseMonths =
+          "Vui lòng nhập số tháng hợp đồng còn lại";
       } else if (isNaN(Number(leaseMonths))) {
         newErrors.remainingLeaseMonths = "Số tháng phải là số";
       } else if (Number(leaseMonths) < 0 || Number(leaseMonths) > 120) {
         newErrors.remainingLeaseMonths = "Số tháng phải từ 0 đến 120";
       }
-
     } else {
       // Validate Pass Đồ
       if (!itemForm.title.trim()) {
@@ -527,6 +531,7 @@ function CreatePassForm({
   // Scroll to first error
   const scrollToError = () => {
     if (scrollRef.current) {
+      //@ts-ignore
       scrollRef.current.scrollTo({ y: 0, animated: true });
     }
   };
@@ -696,9 +701,8 @@ function CreatePassForm({
               onSuccess(createdListing, type);
             },
           },
-        ]
+        ],
       );
-
     } catch (err: any) {
       const errMsg =
         err.response?.data?.errors?.[0]?.message ||
@@ -711,11 +715,25 @@ function CreatePassForm({
   };
 
   return (
-    <ScrollView ref={scrollRef} contentContainerStyle={{ padding: 16, gap: 16 }}>
+    <ScrollView
+    //@ts-ignore
+      ref={scrollRef}
+      contentContainerStyle={{ padding: 16, gap: 16 }}
+    >
       {/* Thông báo về kiểm duyệt */}
-      <View style={{ backgroundColor: "#1e3a8a", padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "#3b82f6" }}>
+      <View
+        style={{
+          backgroundColor: "#1e3a8a",
+          padding: 12,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: "#3b82f6",
+        }}
+      >
         <Text style={{ color: "#93c5fd", fontSize: 13, lineHeight: 20 }}>
-          ℹ️ <Text style={{ fontWeight: "700" }}>Lưu ý:</Text> Tất cả bài đăng cần được quản trị viên duyệt trước khi hiển thị công khai. Mọi chỉnh sửa sau này cũng sẽ cần được duyệt lại.
+          ℹ️ <Text style={{ fontWeight: "700" }}>Lưu ý:</Text> Tất cả bài đăng
+          cần được quản trị viên duyệt trước khi hiển thị công khai. Mọi chỉnh
+          sửa sau này cũng sẽ cần được duyệt lại.
         </Text>
       </View>
 
@@ -743,7 +761,13 @@ function CreatePassForm({
             Tiêu đề <Text style={{ color: themeColors.danger }}>*</Text>
           </Text>
           <TextInput
-            style={[s.input, errors.title && { borderColor: themeColors.danger, borderWidth: 1 }]}
+            style={[
+              s.input,
+              errors.title && {
+                borderColor: themeColors.danger,
+                borderWidth: 1,
+              },
+            ]}
             placeholder={
               type === "room"
                 ? "Pass phòng trọ 25m² Cầu Giấy, đủ đồ..."
@@ -790,7 +814,10 @@ function CreatePassForm({
               s.input,
               type === "item" &&
                 itemForm.dealType === "give_away" && { opacity: 0.6 },
-              errors.price && { borderColor: themeColors.danger, borderWidth: 1 },
+              errors.price && {
+                borderColor: themeColors.danger,
+                borderWidth: 1,
+              },
             ]}
             placeholder="Giá (VNĐ)"
             placeholderTextColor="#64748b"
@@ -854,12 +881,19 @@ function CreatePassForm({
               <Text style={{ color: themeColors.danger }}>*</Text>
             </Text>
             <TextInput
-              style={[s.input, errors.address && { borderColor: themeColors.danger, borderWidth: 1 }]}
+              style={[
+                s.input,
+                errors.address && {
+                  borderColor: themeColors.danger,
+                  borderWidth: 1,
+                },
+              ]}
               placeholder="VD: Số 12 ngõ 45 Cầu Giấy, Hà Nội"
               placeholderTextColor="#64748b"
               value={roomForm.address}
               onChangeText={(val) => {
-                if (errors.address) setErrors((prev) => ({ ...prev, address: "" }));
+                if (errors.address)
+                  setErrors((prev) => ({ ...prev, address: "" }));
                 setRoomForm({ ...roomForm, address: val });
               }}
             />
@@ -867,13 +901,20 @@ function CreatePassForm({
 
             <Text style={s.fieldLabel}>Tiền cọc (VNĐ)</Text>
             <TextInput
-              style={[s.input, errors.deposit && { borderColor: themeColors.danger, borderWidth: 1 }]}
+              style={[
+                s.input,
+                errors.deposit && {
+                  borderColor: themeColors.danger,
+                  borderWidth: 1,
+                },
+              ]}
               placeholder="VD: 3000000"
               placeholderTextColor="#64748b"
               keyboardType="numeric"
               value={roomForm.deposit}
               onChangeText={(val) => {
-                if (errors.deposit) setErrors((prev) => ({ ...prev, deposit: "" }));
+                if (errors.deposit)
+                  setErrors((prev) => ({ ...prev, deposit: "" }));
                 setRoomForm({ ...roomForm, deposit: val });
               }}
             />
@@ -884,32 +925,44 @@ function CreatePassForm({
               <Text style={{ color: themeColors.danger }}>*</Text>
             </Text>
             <TextInput
-              style={[s.input, errors.remainingLeaseMonths && { borderColor: themeColors.danger, borderWidth: 1 }]}
+              style={[
+                s.input,
+                errors.remainingLeaseMonths && {
+                  borderColor: themeColors.danger,
+                  borderWidth: 1,
+                },
+              ]}
               placeholder="VD: 6 (tháng)"
               placeholderTextColor="#64748b"
               keyboardType="numeric"
               value={roomForm.remainingLeaseMonths}
               onChangeText={(val) => {
-                if (errors.remainingLeaseMonths) setErrors((prev) => ({ ...prev, remainingLeaseMonths: "" }));
+                if (errors.remainingLeaseMonths)
+                  setErrors((prev) => ({ ...prev, remainingLeaseMonths: "" }));
                 setRoomForm({ ...roomForm, remainingLeaseMonths: val });
               }}
             />
             <ErrorText field="remainingLeaseMonths" />
 
             <Text style={s.fieldLabel}>Bàn giao từ ngày</Text>
-            <Pressable
-              style={s.input}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <Text style={{ color: roomForm.availableFrom ? themeColors.text : "#64748b" }}>
-                {roomForm.availableFrom 
+            <Pressable style={s.input} onPress={() => setShowDatePicker(true)}>
+              <Text
+                style={{
+                  color: roomForm.availableFrom ? themeColors.text : "#64748b",
+                }}
+              >
+                {roomForm.availableFrom
                   ? new Date(roomForm.availableFrom).toLocaleDateString("vi-VN")
                   : "Chọn ngày bàn giao"}
               </Text>
             </Pressable>
             {showDatePicker && (
               <DateTimePicker
-                value={roomForm.availableFrom ? new Date(roomForm.availableFrom) : new Date()}
+                value={
+                  roomForm.availableFrom
+                    ? new Date(roomForm.availableFrom)
+                    : new Date()
+                }
                 mode="date"
                 display={Platform.OS === "ios" ? "spinner" : "default"}
                 onChange={(event, selectedDate) => {
