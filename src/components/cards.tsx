@@ -67,6 +67,195 @@ export function AccommodationCard({ item, showStatus = false }: { item: any; sho
   );
 }
 
+// 1B. CARD QUẢN LÝ PHÒNG TRỌ (Tin của tôi trong Tìm phòng)
+export function AccommodationMineCard({
+  item,
+  onEdit,
+  onDelete,
+  onSetStatus,
+}: {
+  item: any;
+  onEdit: () => void;
+  onDelete: () => void;
+  onSetStatus?: (status: "active" | "completed" | "closed") => void;
+}) {
+  const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
+  const cardWidth = screenWidth - 24;
+  const imgHeight = Math.round((cardWidth * 3) / 4);
+
+  const firstImage = Array.isArray(item.images) && item.images[0] ? (imageUrl(item.images[0]) as string) : undefined;
+  const id = item.id || item._id;
+
+  const badgeText =
+    (ROOM_TYPE_LABELS as any)[item.roomType] ||
+    item.roomType ||
+    (PASS_TYPE_LABELS as any)[item.type] ||
+    "Phòng trọ";
+
+  let locationText = "";
+  if (typeof item.address === "string" && item.address.trim()) {
+    locationText = item.address.trim();
+  } else if (item.address && typeof item.address === "object") {
+    const parts = [item.address.ward, item.address.district, item.address.city].filter(Boolean);
+    locationText = parts.length > 0 ? parts.join(", ") : (item.address.street || "");
+  } else if (typeof item.area === "string" && item.area.trim()) {
+    locationText = item.area.trim();
+  }
+
+  const isApproved = item.moderationStatus === "approved";
+  const isRejected = item.moderationStatus === "rejected";
+  const dotColor = isApproved ? "#22c55e" : isRejected ? "#ef4444" : "#f59e0b";
+  const statusLabel = isApproved
+    ? "Đã duyệt công khai"
+    : isRejected
+      ? "Bị từ chối"
+      : "Chờ quản trị duyệt";
+
+  return (
+    <Pressable
+      style={s.mineCardContainer}
+      accessibilityRole="button"
+      onPress={() =>
+        router.push({
+          pathname: "/accommodation/[id]",
+          params: { id: String(id) },
+        })
+      }
+    >
+      {firstImage ? (
+        <View style={{ width: "100%", height: imgHeight, overflow: "hidden" }}>
+          {/* Background blurred image */}
+          <Image
+            source={{ uri: firstImage }}
+            style={{ position: "absolute", width: "100%", height: "100%" }}
+            resizeMode="cover"
+            blurRadius={20}
+          />
+          {/* Foreground sharp image */}
+          <Image
+            source={{ uri: firstImage }}
+            style={{ width: "100%", height: imgHeight }}
+            resizeMode="contain"
+          />
+        </View>
+      ) : (
+        <View style={[{ width: "100%", height: imgHeight, backgroundColor: "#1e293b" }, s.coverEmpty]}>
+          <Text style={{ fontSize: 40 }}>🏠</Text>
+        </View>
+      )}
+
+      <View style={{ padding: 14, gap: 6 }}>
+        {/* Badge */}
+        <View style={s.pillBadge}>
+          <Text style={s.pillBadgeText}>{badgeText}</Text>
+        </View>
+
+        {/* Title */}
+        <Text style={s.mineCardTitle} numberOfLines={2}>
+          {item.title || "Bài đăng phòng"}
+        </Text>
+
+        {/* Price */}
+        <Text style={s.mineCardPrice}>
+          {item.price != null ? formatVND(item.price) : "Thỏa thuận"}
+          {item.price != null ? <Text style={s.mineCardPriceUnit}>/tháng</Text> : null}
+        </Text>
+
+        {/* Location */}
+        {locationText ? (
+          <Text style={s.mineCardLocation} numberOfLines={1}>
+            📍 {locationText}
+          </Text>
+        ) : null}
+
+        {/* Bottom row: Status & Actions */}
+        <View style={s.mineCardFooter}>
+          <View style={s.mineStatusRow}>
+            <View style={[s.mineStatusDot, { backgroundColor: dotColor }]} />
+            <Text style={s.mineStatusText}>{statusLabel}</Text>
+          </View>
+
+          <View style={s.mineBtnGroup}>
+            <Pressable
+              style={s.mineEditButton}
+              accessibilityRole="button"
+              accessibilityLabel="Sửa bài đăng"
+              onPress={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+            >
+              <Text style={s.mineEditButtonText}>Sửa</Text>
+            </Pressable>
+            <Pressable
+              style={s.mineDeleteButton}
+              accessibilityRole="button"
+              accessibilityLabel="Xóa bài đăng"
+              onPress={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+            >
+              <Text style={s.mineDeleteButtonText}>Xóa</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* Rejection reason if rejected */}
+        {item.moderationStatus === "rejected" && item.rejectionReason ? (
+          <View style={s.rejectionBox}>
+            <Text style={s.rejectionLabel}>Lý do từ chối:</Text>
+            <Text style={s.rejectionText}>{item.rejectionReason}</Text>
+          </View>
+        ) : null}
+
+        {/* Quick status change buttons if approved */}
+        {item.moderationStatus === "approved" && onSetStatus ? (
+          <View style={s.statusToggleWrap}>
+            <Text style={s.statusToggleLabel}>Thay đổi trạng thái:</Text>
+            <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
+              {item.status !== "completed" && (
+                <Pressable
+                  style={s.statusActionBtn}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    onSetStatus("completed");
+                  }}
+                >
+                  <Text style={s.statusActionBtnText}>✓ Đã cho thuê</Text>
+                </Pressable>
+              )}
+              {item.status !== "closed" && (
+                <Pressable
+                  style={s.statusActionBtn}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    onSetStatus("closed");
+                  }}
+                >
+                  <Text style={s.statusActionBtnText}>✕ Đóng tin</Text>
+                </Pressable>
+              )}
+              {item.status !== "active" && (
+                <Pressable
+                  style={[s.statusActionBtn, { borderColor: "#22c55e" }]}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    onSetStatus("active");
+                  }}
+                >
+                  <Text style={[s.statusActionBtnText, { color: "#22c55e" }]}>↺ Mở lại</Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
 // 2. CARD PASS ĐỒ (PassCard)
 export function PassCard({ item }: { item: any }) {
   const router = useRouter();
@@ -247,4 +436,141 @@ const s = StyleSheet.create({
     borderRadius: 12,
   },
   tagText: { fontSize: 12, color: "#94a3b8" },
+  
+  // Style cho AccommodationMineCard
+  mineCardContainer: {
+    backgroundColor: "#1e293b",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#334155",
+    overflow: "hidden",
+  },
+  pillBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "#4f46e5",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 14,
+  },
+  pillBadgeText: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  mineCardTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#f8fafc",
+    marginTop: 2,
+  },
+  mineCardPrice: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#818cf8",
+    marginTop: 1,
+  },
+  mineCardPriceUnit: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#818cf8",
+  },
+  mineCardLocation: {
+    color: "#94a3b8",
+    fontSize: 14,
+    fontWeight: "400",
+    marginTop: 1,
+  },
+  mineCardFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 8,
+    paddingTop: 4,
+  },
+  mineStatusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flex: 1,
+  },
+  mineStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  mineStatusText: {
+    fontSize: 13,
+    color: "#94a3b8",
+    fontWeight: "500",
+  },
+  mineBtnGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  mineEditButton: {
+    backgroundColor: "#312e81",
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  mineEditButtonText: {
+    color: "#c7d2fe",
+    fontWeight: "600",
+    fontSize: 13,
+  },
+  mineDeleteButton: {
+    backgroundColor: "#450a0a",
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  mineDeleteButtonText: {
+    color: "#fca5a5",
+    fontWeight: "600",
+    fontSize: 13,
+  },
+  rejectionBox: {
+    backgroundColor: "#450a0a",
+    borderWidth: 1,
+    borderColor: "#ef4444",
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 6,
+  },
+  rejectionLabel: {
+    color: "#fca5a5",
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  rejectionText: {
+    color: "#fca5a5",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  statusToggleWrap: {
+    marginTop: 6,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderColor: "#334155",
+  },
+  statusToggleLabel: {
+    color: "#94a3b8",
+    fontSize: 12,
+    marginBottom: 6,
+  },
+  statusActionBtn: {
+    backgroundColor: "#0f172a",
+    borderWidth: 1,
+    borderColor: "#334155",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  statusActionBtnText: {
+    color: "#f8fafc",
+    fontSize: 11,
+    fontWeight: "600",
+  },
 });

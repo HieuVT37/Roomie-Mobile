@@ -3,37 +3,37 @@ import * as ImagePicker from "expo-image-picker";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-    Alert,
-    Image,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    View,
+  Alert,
+  Image,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { addFavoriteApi, removeFavoriteApi } from "../../api/favorites";
 import {
-    deletePassApi,
-    getPassApi,
-    setPassStatusApi,
-    updatePassApi,
+  deletePassApi,
+  getPassApi,
+  setPassStatusApi,
+  updatePassApi,
 } from "../../api/pass";
 import { uploadImagesApi } from "../../api/uploads";
 import { useAuth } from "../../auth/AuthContext";
 import { MessageOwnerButton } from "../../components/MessageOwnerButton";
 import { Gallery, Loading, useBottomPad } from "../../components/ui";
 import {
-    CONDITION_LABELS,
-    DEAL_LABELS,
-    ITEM_CATEGORY_LABELS,
-    PASS_STATUS_LABELS,
-    PASS_TYPE_LABELS,
-    formatVND,
-    passPriceText,
+  CONDITION_LABELS,
+  DEAL_LABELS,
+  ITEM_CATEGORY_LABELS,
+  PASS_STATUS_LABELS,
+  PASS_TYPE_LABELS,
+  formatVND,
+  passPriceText,
 } from "../../utils/labels";
 
 const themeColors = {
@@ -204,34 +204,37 @@ export default function PassDetailScreen() {
       <View style={s.section}>
         <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
           <Text style={s.badge}>{(PASS_TYPE_LABELS as any)[l.type]}</Text>
-          <View
-            style={[
-              s.statusPill,
-              {
-                backgroundColor:
-                  l.status === "active"
-                    ? "#064e3b"
-                    : l.status === "completed"
-                      ? "#312e81"
-                      : "#450a0a",
-              },
-            ]}
-          >
-            <Text
-              style={{
-                color:
-                  l.status === "active"
-                    ? "#6ee7b7"
-                    : l.status === "completed"
-                      ? "#a5b4fc"
-                      : "#fca5a5",
-                fontSize: 12,
-                fontWeight: "600",
-              }}
+          {/* CHỈ HIỂN THỊ BADGE STATUS KHI ĐÃ ĐƯỢC DUYỆT */}
+          {l.moderationStatus === "approved" && (
+            <View
+              style={[
+                s.statusPill,
+                {
+                  backgroundColor:
+                    l.status === "active"
+                      ? "#064e3b"
+                      : l.status === "completed"
+                        ? "#312e81"
+                        : "#450a0a",
+                },
+              ]}
             >
-              {(PASS_STATUS_LABELS as any)[l.status] || l.status}
-            </Text>
-          </View>
+              <Text
+                style={{
+                  color:
+                    l.status === "active"
+                      ? "#6ee7b7"
+                      : l.status === "completed"
+                        ? "#a5b4fc"
+                        : "#fca5a5",
+                  fontSize: 12,
+                  fontWeight: "600",
+                }}
+              >
+                {(PASS_STATUS_LABELS as any)[l.status] || l.status}
+              </Text>
+            </View>
+          )}
           {!isOwner && (
             <Pressable onPress={toggleFavorite} style={{ marginLeft: "auto" }}>
               <Text style={{ fontSize: 26 }}>{fav ? "❤️" : "🤍"}</Text>
@@ -247,6 +250,45 @@ export default function PassDetailScreen() {
       {isOwner && (
         <View style={s.ownerCard}>
           <Text style={s.ownerCardTitle}>⚙️ Quản lý bài đăng của bạn</Text>
+          
+          {/* Hiển thị trạng thái kiểm duyệt */}
+          <View style={{ marginTop: 8, marginBottom: 8 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <View
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor:
+                    l.moderationStatus === "approved"
+                      ? "#22c55e"
+                      : l.moderationStatus === "rejected"
+                        ? "#ef4444"
+                        : "#f59e0b",
+                }}
+              />
+              <Text style={{ color: themeColors.muted, fontSize: 14 }}>
+                {l.moderationStatus === "approved"
+                  ? "Đã duyệt công khai"
+                  : l.moderationStatus === "rejected"
+                    ? "Bị từ chối"
+                    : "Chờ quản trị duyệt"}
+              </Text>
+            </View>
+            
+            {/* Hiển thị lý do từ chối nếu có */}
+            {l.moderationStatus === "rejected" && l.rejectionReason && (
+              <View style={{ backgroundColor: "#450a0a", borderWidth: 1, borderColor: themeColors.danger, borderRadius: 8, padding: 10, marginTop: 8 }}>
+                <Text style={{ color: "#fca5a5", fontSize: 12, fontWeight: "700", marginBottom: 4 }}>
+                  Lý do từ chối:
+                </Text>
+                <Text style={{ color: "#fca5a5", fontSize: 12, lineHeight: 18 }}>
+                  {l.rejectionReason}
+                </Text>
+              </View>
+            )}
+          </View>
+          
           <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
             <Pressable
               style={s.editButton}
@@ -264,43 +306,45 @@ export default function PassDetailScreen() {
             </Pressable>
           </View>
 
-          {/* Đổi trạng thái bài viết */}
-          <View style={{ marginTop: 12, borderTopWidth: 1, borderColor: themeColors.border, paddingTop: 10 }}>
-            <Text style={{ color: themeColors.muted, fontSize: 13, marginBottom: 8 }}>
-              Thay đổi trạng thái bài viết:
-            </Text>
-            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-              {l.status !== "completed" && (
-                <Pressable
-                  style={s.statusActionBtn}
-                  disabled={busyAction}
-                  onPress={() => handleSetStatus("completed")}
-                >
-                  <Text style={s.statusActionBtnText}>✓ Đã pass xong</Text>
-                </Pressable>
-              )}
-              {l.status !== "closed" && (
-                <Pressable
-                  style={s.statusActionBtn}
-                  disabled={busyAction}
-                  onPress={() => handleSetStatus("closed")}
-                >
-                  <Text style={s.statusActionBtnText}>✕ Đóng tin</Text>
-                </Pressable>
-              )}
-              {l.status !== "active" && (
-                <Pressable
-                  style={[s.statusActionBtn, { borderColor: themeColors.success }]}
-                  disabled={busyAction}
-                  onPress={() => handleSetStatus("active")}
-                >
-                  <Text style={[s.statusActionBtnText, { color: themeColors.success }]}>
-                    ↺ Mở lại bài đăng
-                  </Text>
-                </Pressable>
-              )}
+          {/* Đổi trạng thái bài viết - CHỈ HIỂN THỊ KHI ĐÃ ĐƯỢC DUYỆT */}
+          {l.moderationStatus === "approved" && (
+            <View style={{ marginTop: 12, borderTopWidth: 1, borderColor: themeColors.border, paddingTop: 10 }}>
+              <Text style={{ color: themeColors.muted, fontSize: 13, marginBottom: 8 }}>
+                Thay đổi trạng thái bài viết:
+              </Text>
+              <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+                {l.status !== "completed" && (
+                  <Pressable
+                    style={s.statusActionBtn}
+                    disabled={busyAction}
+                    onPress={() => handleSetStatus("completed")}
+                  >
+                    <Text style={s.statusActionBtnText}>✓ Đã pass xong</Text>
+                  </Pressable>
+                )}
+                {l.status !== "closed" && (
+                  <Pressable
+                    style={s.statusActionBtn}
+                    disabled={busyAction}
+                    onPress={() => handleSetStatus("closed")}
+                  >
+                    <Text style={s.statusActionBtnText}>✕ Đóng tin</Text>
+                  </Pressable>
+                )}
+                {l.status !== "active" && (
+                  <Pressable
+                    style={[s.statusActionBtn, { borderColor: themeColors.success }]}
+                    disabled={busyAction}
+                    onPress={() => handleSetStatus("active")}
+                  >
+                    <Text style={[s.statusActionBtnText, { color: themeColors.success }]}>
+                      ↺ Mở lại bài đăng
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
             </View>
-          </View>
+          )}
         </View>
       )}
 
@@ -438,7 +482,16 @@ function EditPassModal({
     initialListing.price != null ? String(initialListing.price) : "",
   );
   const [area, setArea] = useState(initialListing.area || "");
-  const [contact, setContact] = useState(initialContact || "");
+  const [contact, setContact] = useState(() => {
+    // Lấy số điện thoại từ nhiều nguồn có thể, ưu tiên theo thứ tự
+    const phone = 
+      initialListing.contact ||
+      initialListing.contactPhone || 
+      initialListing.phone ||
+      initialContact || 
+      "";
+    return String(phone || "");
+  });
 
   // Room fields
   const [address, setAddress] = useState(room.address || "");
@@ -535,7 +588,7 @@ function EditPassModal({
 
   // Scroll to first error
   const scrollToError = () => {
-    if (scrollRef.current) {
+    if (scrollRef.current) {//@ts-ignore
       scrollRef.current.scrollTo({ y: 0, animated: true });
     }
   };
@@ -682,7 +735,7 @@ function EditPassModal({
             </Text>
           </Pressable>
         </View>
-
+       {/* @ts-ignore*/}
         <ScrollView ref={scrollRef} contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 60 }}>
           {/* Thông báo về kiểm duyệt */}
           <View style={{ backgroundColor: "#1e3a8a", padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "#3b82f6" }}>
@@ -1136,42 +1189,42 @@ const sModal = StyleSheet.create({
     marginTop: 4,
   },
   chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
     backgroundColor: themeColors.bg,
     borderWidth: 1,
     borderColor: themeColors.border,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
   },
   chipActive: {
     backgroundColor: themeColors.primary,
     borderColor: themeColors.primary,
   },
   chipText: {
-    color: themeColors.muted,
-    fontSize: 13,
+    fontSize: 12,
+    color: themeColors.text,
+    fontWeight: "600",
   },
   chipTextActive: {
     color: "#fff",
-    fontWeight: "600",
   },
   uploadBox: {
-    width: 70,
-    height: 70,
+    width: 90,
+    height: 90,
     backgroundColor: themeColors.bg,
-    borderWidth: 1,
-    borderColor: themeColors.primary,
+    borderWidth: 2,
     borderStyle: "dashed",
-    borderRadius: 10,
+    borderColor: themeColors.border,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
   imgBox: {
-    width: 70,
-    height: 70,
-    borderRadius: 10,
-    overflow: "hidden",
+    width: 90,
+    height: 90,
     position: "relative",
+    borderRadius: 12,
+    overflow: "hidden",
   },
   img: {
     width: "100%",
@@ -1179,25 +1232,33 @@ const sModal = StyleSheet.create({
   },
   delBadge: {
     position: "absolute",
-    top: 3,
-    right: 3,
-    backgroundColor: themeColors.danger,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
   saveBtn: {
     backgroundColor: themeColors.primary,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
     borderRadius: 12,
-    paddingVertical: 14,
     alignItems: "center",
-    marginBottom: 20,
+    justifyContent: "center",
+    marginTop: 8,
+    shadowColor: themeColors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   saveBtnText: {
     color: "#fff",
+    fontSize: 17,
     fontWeight: "700",
-    fontSize: 16,
+    letterSpacing: 0.5,
   },
 });
