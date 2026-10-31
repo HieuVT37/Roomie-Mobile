@@ -4,6 +4,11 @@ import { AIChatButton } from "../../components/AIChat";
 import { useLanguage } from "../../context/LanguageContext";
 import { useNotifications } from "../../context/NotificationContext";
 
+// Mặc định mở tab "Kết nối" khi vào (tabs)
+export const unstable_settings = {
+  initialRouteName: "connections",
+};
+
 const themeColors = {
   bg: "#0f172a",
   card: "#1e293b",
@@ -20,16 +25,18 @@ const icon = (emoji: string) =>
     );
   };
 
+const badgeStyle = {
+  backgroundColor: themeColors.primary,
+  color: "#fff",
+};
+
 export default function TabsLayout() {
   const unread = useNotifications();
-  const { language, toggleLanguage, t } = useLanguage();
+  const { t } = useLanguage();
 
   return (
     <Tabs
-      //@ts-ignore
-      initialRouteName="connections"
       screenOptions={{
-        // Gộp chung cả nút chuyển ngôn ngữ và nút AI Chat ở đây để không bị trùng lặp
         headerRight: () => (
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <AIChatButton />
@@ -68,10 +75,7 @@ export default function TabsLayout() {
           title: t.tabs.connections,
           tabBarIcon: icon("🤝"),
           tabBarBadge: unread.connections > 0 ? unread.connections : undefined,
-          tabBarBadgeStyle: {
-            backgroundColor: themeColors.primary,
-            color: "#fff",
-          },
+          tabBarBadgeStyle: badgeStyle,
         }}
       />
       <Tabs.Screen
@@ -80,10 +84,7 @@ export default function TabsLayout() {
           title: t.tabs.messages,
           tabBarIcon: icon("💬"),
           tabBarBadge: unread.messages > 0 ? unread.messages : undefined,
-          tabBarBadgeStyle: {
-            backgroundColor: themeColors.primary,
-            color: "#fff",
-          },
+          tabBarBadgeStyle: badgeStyle,
         }}
       />
       <Tabs.Screen

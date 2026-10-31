@@ -1,13 +1,13 @@
 import { Stack } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    LayoutAnimation,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  LayoutAnimation,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import api from "../../api/axios";
 
@@ -72,7 +72,7 @@ const DEFAULT_FAQS = [
 export default function SupportScreen() {
   const [faqs, setFaqs] = useState<any[]>(DEFAULT_FAQS);
   const [loading, setLoading] = useState<boolean>(true);
-  const [expandedId, setExpandedId] = useState<string | null>("1"); // Mặc định mở câu hỏi đầu tiên
+  const [expandedId, setExpandedId] = useState<string | null>(null); // Mặc định mở câu hỏi đầu tiên
 
   useEffect(() => {
     api
