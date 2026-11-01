@@ -1,0 +1,77 @@
+{
+  "expo": {
+    "name": "Roomie",
+    "slug": "Roomie-Mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/roomie-logo.png",
+    "scheme": "roomiemobile",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "icon": "./assets/images/roomie-logo.png",
+      "bundleIdentifier": "com.roomie.mobile",
+      "supportsTablet": false
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/images/roomie-logo.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "googleServicesFile": "./google-services.json",
+      "package": "com.roomie.mobile",
+      "permissions": ["android.permission.RECORD_AUDIO"]
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#208AEF",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 76
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Cho phép Roomie truy cập ảnh để gửi trong tin nhắn."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/roomie-logo.png",
+          "color": "#6366f1"
+        }
+      ],
+      "expo-font",
+      "expo-image",
+      "expo-status-bar",
+      "expo-web-browser",
+      "@react-native-community/datetimepicker"
+    ],
+    "experiments": {
+      "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "7f9b40c0-7889-49e1-bc1d-0fb4a2d93cbc"
+      },
+      "firebase": {
+        "apiKey": "AIzaSyAeil3ekCt09IPAQYzr-p7gvmhfa-mxpX4",
+        "authDomain": "rommie-moblie.firebaseapp.com",
+        "projectId": "rommie-moblie",
+        "storageBucket": "rommie-moblie.firebasestorage.app",
+        "messagingSenderId": "954492563875",
+        "appId": "1:954492563875:web:2659eb143b1f931c3b6a16"
+      }
+    }
+  }
+}

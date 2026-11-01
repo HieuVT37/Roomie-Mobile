@@ -1,0 +1,19 @@
+# Hướng dẫn cấu hình Firebase (Firestore & Storage) cho Roomie-Mobile
+
+Dự án sử dụng **Firebase Cloud Firestore** để lưu và đồng bộ tin nhắn realtime, cùng **Firebase Storage** để tải lên ảnh tin nhắn (tối đa 4 ảnh/lần) và ảnh đại diện hồ sơ (`PUT /profiles/me`).
+
+## 1. Điền thông tin vào file `.env`
+Mở file `.env` ở thư mục gốc và điền thông tin từ **Firebase Console -> Project Settings -> Web App**:
+
+```env
+EXPO_PUBLIC_FIREBASE_API_KEY=...
+EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=...
+EXPO_PUBLIC_FIREBASE_PROJECT_ID=...
+EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=...
+EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
+EXPO_PUBLIC_FIREBASE_APP_ID=...
+```
+
+## 2. Bật Firestore Database & Firebase Storage
+1. Vào **Build -> Firestore Database** -> Nhấn **Create database** -> Cập nhật tab **Rules** theo file `firestore.rules`.
+2. Vào **Build -> Storage** -> Nhấn **Get started** -> Cập nhật tab **Rules** theo file `storage.rules`.
