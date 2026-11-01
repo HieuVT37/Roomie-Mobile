@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -25,6 +26,7 @@ import {
   Loading,
   LoginPrompt,
   Segments,
+  shared,
   useBottomPad,
 } from "../../components/ui";
 import { listItemKey } from "../../hooks/infinite-list-utils";
@@ -39,6 +41,7 @@ export default function AccommodationListScreen() {
   const [tab, setTab] = useState("search");
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [success, setSuccess] = useState(null);
   const { user, loading: authLoading, refreshSession } = useAuth();
@@ -48,6 +51,18 @@ export default function AccommodationListScreen() {
   const bottom = useBottomPad(20);
   const listRef = useRef(null);
   useTabPressScrollTop(listRef);
+
+  // Tự động tìm kiếm khi người dùng ngừng gõ 300ms (giống mục Pass)
+  useEffect(() => {
+    if (text.trim() !== q) setIsSearching(true);
+    const timer = setTimeout(() => {
+      setQ(text.trim());
+      setIsSearching(false);
+      listRef.current?.scrollToOffset({ offset: 0, animated: false });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [text]);
+
   const listVisible =
     tab === "search" || (tab === "mine" && !authLoading && canViewMine);
   const list = useInfiniteList(
@@ -80,23 +95,12 @@ export default function AccommodationListScreen() {
   );
   const scrollToTop = () =>
     listRef.current?.scrollToOffset({ offset: 0, animated: false });
-  const search = () => {
-    setQ(text.trim());
-    scrollToTop();
-    Keyboard.dismiss();
-  };
   const clearSearch = () => {
     setText("");
     setQ("");
+    setIsSearching(false);
     scrollToTop();
     Keyboard.dismiss();
-  };
-  const changeSearchText = (value) => {
-    setText(value);
-    if (!value.trim()) {
-      setQ("");
-      scrollToTop();
-    }
   };
   const created = () => {
     setSuccess({
@@ -114,7 +118,7 @@ export default function AccommodationListScreen() {
         options={[
           { key: "search", label: "Tìm phòng" },
           { key: "mine", label: "Tin của tôi" },
-          { key: "create", label: "Đăng tin" },
+          { key: "create", label: "Tin mới" },
         ]}
       />
 
@@ -137,57 +141,47 @@ export default function AccommodationListScreen() {
             <>
               <View style={s.searchRow}>
                 <View style={s.searchInputWrap}>
+                  <Ionicons
+                    name="search"
+                    size={18}
+                    color="#64748b"
+                    style={{ marginRight: 8 }}
+                  />
                   <TextInput
                     accessibilityLabel="Tìm phòng theo khu vực hoặc tiêu đề"
                     style={s.searchInput}
                     placeholder="Tiêu đề, quận, phường..."
-                    placeholderTextColor={themeColors.placeholder}
+                    placeholderTextColor="#64748b"
                     value={text}
-                    onChangeText={changeSearchText}
+                    onChangeText={setText}
                     returnKeyType="search"
-                    onSubmitEditing={search}
                     autoCorrect={false}
                   />
-                  {!!(text || q) && (
+                  {isSearching && (
+                    <View style={{ padding: 4 }}>
+                      <Ionicons
+                        name="hourglass-outline"
+                        size={18}
+                        color={colors.primary}
+                      />
+                    </View>
+                  )}
+                  {text.length > 0 && !isSearching && (
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel="Xóa tìm kiếm"
-                      hitSlop={4}
-                      style={s.clearButton}
+                      hitSlop={8}
                       onPress={clearSearch}
+                      style={{ padding: 4 }}
                     >
-                      <Text style={s.clearText}>✕</Text>
+                      <Ionicons name="close-circle" size={18} color="#94a3b8" />
                     </Pressable>
                   )}
                 </View>
-                <Pressable
-                  accessibilityRole="button"
-                  style={s.searchButton}
-                  onPress={search}
-                >
-                  <Text style={s.buttonText}>Tìm</Text>
-                </Pressable>
               </View>
-              {!!q && <Text style={s.query}>Kết quả cho “{q}”</Text>}
             </>
           ) : (
-            <View style={s.mineHeader}>
-              <View style={s.mineTitleWrap}>
-                <Text style={s.heading}>Bài đăng của bạn</Text>
-                <Text style={s.hint}>
-                  Xem thông tin và trạng thái từng phòng.
-                </Text>
-              </View>
-              {canCreate && (
-                <Pressable
-                  accessibilityRole="button"
-                  style={s.newButton}
-                  onPress={() => setTab("create")}
-                >
-                  <Text style={s.buttonText}>+ Đăng tin</Text>
-                </Pressable>
-              )}
-            </View>
+            ""
           )}
 
           {tab === "mine" && success?.ownerKey === userKey && (
@@ -204,7 +198,7 @@ export default function AccommodationListScreen() {
             </View>
           )}
 
-          {list.loading ? (
+          {list.loading && (tab !== "search" || !q) ? (
             <Loading />
           ) : (
             <FlatList
@@ -243,50 +237,43 @@ export default function AccommodationListScreen() {
                 ) : undefined
               }
               ListEmptyComponent={
-                <View style={s.empty}>
-                  <Text style={s.emptyIcon}>{list.error ? "⚠️" : "🏠"}</Text>
-                  <Text style={s.emptyTitle}>
-                    {list.error
-                      ? "Chưa tải được danh sách"
-                      : tab === "mine"
-                        ? "Bạn chưa có bài đăng nào"
-                        : "Không tìm thấy phòng phù hợp"}
-                  </Text>
-                  <Text style={s.hint}>
+                <View style={s.emptyWrap}>
+                  <Text style={[shared.empty, { textAlign: "center" }]}>
                     {list.error ||
-                      (tab === "mine"
-                        ? "Bài đăng sau khi tạo thành công sẽ xuất hiện tại đây."
-                        : q
-                          ? "Thử khu vực hoặc từ khóa khác, hoặc xóa tìm kiếm."
-                          : "Kéo xuống để tải lại danh sách phòng.")}
+                      (q
+                        ? `Không tìm thấy phòng ở khu vực "${q}".`
+                        : tab === "mine"
+                          ? "Bạn chưa có bài đăng nào."
+                          : "Chưa có phòng nào được đăng.")}
                   </Text>
                   {list.error ? (
                     <Pressable
-                      accessibilityRole="button"
-                      style={s.retryButton}
+                      style={s.clearFilterEmptyBtn}
                       onPress={list.refresh}
                     >
-                      <Text style={s.buttonText}>Thử lại</Text>
+                      <Ionicons name="refresh-outline" size={16} color="#fff" />
+                      <Text style={s.clearFilterEmptyBtnText}>Thử lại</Text>
                     </Pressable>
                   ) : tab === "mine" ? (
                     <Pressable
-                      accessibilityRole="button"
-                      style={s.retryButton}
+                      style={s.clearFilterEmptyBtn}
                       onPress={() => setTab("create")}
                     >
-                      <Text style={s.buttonText}>
+                      <Text style={s.clearFilterEmptyBtnText}>
                         {canCreate
                           ? "Đăng tin đầu tiên"
                           : "Xem điều kiện đăng tin"}
                       </Text>
                     </Pressable>
-                  ) : !!(text || q) ? (
+                  ) : !!q ? (
                     <Pressable
-                      accessibilityRole="button"
-                      style={s.retryButton}
+                      style={s.clearFilterEmptyBtn}
                       onPress={clearSearch}
                     >
-                      <Text style={s.buttonText}>Xóa tìm kiếm</Text>
+                      <Ionicons name="refresh-outline" size={16} color="#fff" />
+                      <Text style={s.clearFilterEmptyBtnText}>
+                        Xóa bộ lọc & Tải lại
+                      </Text>
                     </Pressable>
                   ) : null}
                 </View>
@@ -396,42 +383,47 @@ const s = StyleSheet.create({
   searchRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
     marginHorizontal: 12,
-    marginBottom: 8,
+    marginTop: 0,
+    marginBottom: 12,
+    gap: 8,
+  },
+  emptyWrap: {
+    alignItems: "center",
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+  },
+  clearFilterEmptyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginTop: 8,
+  },
+  clearFilterEmptyBtnText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 13,
   },
   searchInputWrap: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: colors.card,
-    borderColor: colors.border,
     borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 46,
   },
   searchInput: {
     flex: 1,
-    minHeight: 48,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
     color: colors.text,
-    fontSize: 15,
-  },
-  clearButton: {
-    width: 44,
-    minHeight: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  clearText: { color: colors.muted, fontSize: 19 },
-  searchButton: {
-    minHeight: 48,
-    minWidth: 54,
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    backgroundColor: colors.primary,
+    fontSize: 14,
+    paddingVertical: 0,
   },
   buttonText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   query: {

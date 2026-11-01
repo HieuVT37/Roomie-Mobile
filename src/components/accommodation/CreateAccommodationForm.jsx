@@ -12,12 +12,9 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View,
+  View
 } from "react-native";
-import {
-  createAccommodationApi,
-  updateAccommodationApi,
-} from "../../api/accommodations";
+import { createAccommodationApi, updateAccommodationApi } from "../../api/accommodations";
 import { uploadImagesApi } from "../../api/uploads";
 import {
   accommodationErrorMessage,
@@ -27,53 +24,45 @@ import {
 } from "../../utils/accommodation-form";
 import { AMENITIES, ROOM_TYPE_LABELS } from "../../utils/labels";
 import { colors, KeyboardScreen, useBottomPad } from "../ui";
-export function CreateAccommodationForm({
-  onSuccess,
-  initialData,
+
+export function CreateAccommodationForm({ 
+  onSuccess, 
+  initialData, 
   initialContact,
   accommodationId,
-  mode = "create",
+  mode = "create" 
 }) {
   // Parse initial data if in edit mode
   const getInitialValues = () => {
     if (mode === "edit" && initialData) {
-      const addr =
-        typeof initialData.address === "object" ? initialData.address : {};
+      const addr = typeof initialData.address === "object" ? initialData.address : {};
       const costs = initialData.extraCosts || {};
+      
       return {
         title: initialData.title || "",
         price: initialData.price != null ? String(initialData.price) : "",
         deposit: initialData.deposit != null ? String(initialData.deposit) : "",
         description: initialData.description || "",
-        address:
-          typeof initialData.address === "string" ? initialData.address : "",
+        address: typeof initialData.address === "string" ? initialData.address : "",
         city: addr.city || "",
         district: addr.district || "",
         ward: addr.ward || "",
         street: addr.street || "",
         roomType: initialData.roomType || "single",
         area: initialData.area != null ? String(initialData.area) : "",
-        maxOccupants:
-          initialData.maxOccupants != null
-            ? String(initialData.maxOccupants)
-            : "",
-        availableFrom: initialData.availableFrom
-          ? initialData.availableFrom.slice(0, 10)
-          : "",
+        maxOccupants: initialData.maxOccupants != null ? String(initialData.maxOccupants) : "",
+        availableFrom: initialData.availableFrom ? initialData.availableFrom.slice(0, 10) : "",
         electricity: costs.electricity != null ? String(costs.electricity) : "",
         water: costs.water != null ? String(costs.water) : "",
         internet: costs.internet != null ? String(costs.internet) : "",
         otherCost: costs.other || "",
-        amenities: Array.isArray(initialData.amenities)
-          ? initialData.amenities
-          : [],
+        amenities: Array.isArray(initialData.amenities) ? initialData.amenities : [],
         rentalTerms: initialData.rentalTerms || "",
-        contact:
-          initialData.contactPhone ||
-          initialData.contact ||
-          initialData.phone ||
-          initialContact ||
-          "",
+        contact: initialData.contactPhone
+          || initialData.contact
+          || initialData.phone
+          || initialContact
+          || "",
         images: Array.isArray(initialData.images) ? initialData.images : [],
       };
     }
@@ -82,22 +71,21 @@ export function CreateAccommodationForm({
       roomType: "single",
     };
   };
+
   const [values, setValues] = useState(getInitialValues());
   const [imageAssets, setImageAssets] = useState([]);
   // Normalize: API có thể trả về string[] hoặc { url: string }[]
   const normalizeImageUrls = (raw) =>
-    (raw || [])
-      .map((img) => {
-        if (typeof img === "string") return img;
-        if (img && typeof img === "object")
-          return img.url || img.uri || img.src || "";
-        return "";
-      })
-      .filter(Boolean);
+    (raw || []).map((img) => {
+      if (typeof img === "string") return img;
+      if (img && typeof img === "object") return img.url || img.uri || img.src || "";
+      return "";
+    }).filter(Boolean);
+
   const [existingImages, setExistingImages] = useState(
     mode === "edit" && initialData?.images
       ? normalizeImageUrls(initialData.images)
-      : [],
+      : []
   );
   const [errors, setErrors] = useState({});
   const [imageError, setImageError] = useState("");
@@ -108,30 +96,33 @@ export function CreateAccommodationForm({
   const mounted = useRef(true);
   const scrollRef = useRef(null);
   const bottom = useBottomPad(28);
+
   // Lưu vị trí Y của các trường để scroll đến trường có lỗi
   const fieldPositions = useRef({});
+
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
     };
   }, []);
+
   const updateField = (field, value) => {
     setValues((previous) => ({ ...previous, [field]: value }));
     // Không xóa lỗi khi nhập, để hiển thị tất cả lỗi cùng lúc
     // Lỗi chỉ được xóa khi submit lại và validation pass
   };
+
   const toggleAmenity = (name) => {
     setValues((previous) => {
-      const current = Array.isArray(previous.amenities)
-        ? previous.amenities
-        : [];
+      const current = Array.isArray(previous.amenities) ? previous.amenities : [];
       const next = current.includes(name)
         ? current.filter((item) => item !== name)
         : [...current, name];
       return { ...previous, amenities: next };
     });
   };
+
   const pickImages = async () => {
     const totalImages = existingImages.length + imageAssets.length;
     if (totalImages >= 8) {
@@ -145,19 +136,21 @@ export function CreateAccommodationForm({
       quality: 0.8,
     });
     if (!result.canceled && result.assets) {
-      setImageAssets((prev) =>
-        [...prev, ...result.assets].slice(0, 8 - existingImages.length),
-      );
+      setImageAssets((prev) => [...prev, ...result.assets].slice(0, 8 - existingImages.length));
     }
   };
+
   const removeImage = (index) => {
     setImageAssets((prev) => prev.filter((_, i) => i !== index));
   };
+
   const removeExistingImage = (index) => {
     setExistingImages((prev) => prev.filter((_, i) => i !== index));
   };
+
   const submit = async () => {
     if (submitting.current) return;
+    
     // Validate hình ảnh trước
     const totalImages = existingImages.length + imageAssets.length;
     if (totalImages === 0) {
@@ -166,21 +159,22 @@ export function CreateAccommodationForm({
       return;
     }
     setImageError("");
+    
     const validation = validateAccommodationForm(values);
+    
     setErrors(validation);
     setSubmitError("");
+    
     if (Object.keys(validation).length) {
       // Tìm trường đầu tiên có lỗi và scroll đến đó
       const errorFields = Object.keys(validation);
       const firstErrorField = errorFields[0];
+      
       setTimeout(() => {
         const yPosition = fieldPositions.current[firstErrorField];
         if (yPosition !== undefined && yPosition > 0) {
           // Scroll đến vị trí trường lỗi, trừ đi 100px để hiển thị label
-          scrollRef.current?.scrollTo({
-            y: Math.max(0, yPosition - 100),
-            animated: true,
-          });
+          scrollRef.current?.scrollTo({ y: Math.max(0, yPosition - 100), animated: true });
         } else {
           // Fallback: scroll về đầu nếu không tìm thấy vị trí
           scrollRef.current?.scrollTo({ y: 0, animated: true });
@@ -188,15 +182,16 @@ export function CreateAccommodationForm({
       }, 100);
       return;
     }
+
     submitting.current = true;
     setSaving(true);
     Keyboard.dismiss();
+
     try {
       let uploadedUrls = [...existingImages];
-      const currentImages =
-        typeof imageAssets !== "undefined" ? imageAssets : [];
-      const uploader =
-        typeof uploadImagesApi !== "undefined" ? uploadImagesApi : null;
+      const currentImages = typeof imageAssets !== "undefined" ? imageAssets : [];
+      const uploader = typeof uploadImagesApi !== "undefined" ? uploadImagesApi : null;
+
       if (currentImages.length > 0 && uploader) {
         const files = currentImages.map((asset, index) => {
           const filename =
@@ -213,9 +208,7 @@ export function CreateAccommodationForm({
                 : "image/jpeg";
           return {
             uri: asset.uri,
-            name: filename.endsWith(`.${ext}`)
-              ? filename
-              : `${filename}.${ext}`,
+            name: filename.endsWith(`.${ext}`) ? filename : `${filename}.${ext}`,
             type: mimeType,
           };
         });
@@ -225,25 +218,28 @@ export function CreateAccommodationForm({
           : uploadResult.urls || [];
         uploadedUrls = [...uploadedUrls, ...newUploadedUrls];
       }
+
       const payload = buildAccommodationPayload({
         ...values,
         images: uploadedUrls.length > 0 ? uploadedUrls : values.images,
       });
+
       if (mode === "edit" && accommodationId) {
         await updateAccommodationApi(accommodationId, payload);
         Alert.alert(
           "✅ Đã lưu thay đổi",
           "Bài viết đã được cập nhật và đang chờ quản trị viên duyệt lại. Sau khi được duyệt, thay đổi sẽ hiển thị công khai.",
-          [{ text: "Đồng ý" }],
+          [{ text: "Đồng ý" }]
         );
       } else {
         await createAccommodationApi(payload);
         Alert.alert(
           "✅ Đã gửi bài đăng",
           "Bài viết của bạn đang chờ quản trị viên duyệt. Sau khi được duyệt, bài viết sẽ hiển thị công khai.\n\nBạn có thể xem trạng thái ở tab 'Tin của tôi'.",
-          [{ text: "Đồng ý" }],
+          [{ text: "Đồng ý" }]
         );
       }
+      
       if (mounted.current) onSuccess();
     } catch (error) {
       if (mounted.current) setSubmitError(accommodationErrorMessage(error));
@@ -252,6 +248,7 @@ export function CreateAccommodationForm({
       if (mounted.current) setSaving(false);
     }
   };
+
   return (
     <KeyboardScreen>
       <ScrollView
@@ -262,27 +259,10 @@ export function CreateAccommodationForm({
         keyboardDismissMode="on-drag"
       >
         <View style={s.intro}>
-          <Text style={s.title}>
-            {mode === "edit" ? "Chỉnh sửa bài đăng" : "Đăng tin cho thuê phòng"}
-          </Text>
-          <Text style={s.hint}>
-            {mode === "edit"
-              ? "Chỉnh sửa thông tin phòng. Các mục có dấu * là bắt buộc."
-              : "Điền thông tin phòng. Các mục có dấu * là bắt buộc."}
-          </Text>
-          <View
-            style={{
-              backgroundColor: "#1e3a8a",
-              padding: 12,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: "#3b82f6",
-              marginTop: 8,
-            }}
-          >
+          
+          <View style={{ backgroundColor: "#1e3a8a", padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "#3b82f6", marginTop: 8 }}>
             <Text style={{ color: "#93c5fd", fontSize: 13, lineHeight: 20 }}>
-              ℹ️ <Text style={{ fontWeight: "700" }}>Lưu ý:</Text>{" "}
-              {mode === "edit"
+              ℹ️ <Text style={{ fontWeight: "700" }}>Lưu ý:</Text> {mode === "edit" 
                 ? "Mọi chỉnh sửa cần được quản trị viên duyệt lại trước khi hiển thị công khai."
                 : "Tất cả bài đăng cần được quản trị viên duyệt trước khi hiển thị công khai. Bạn có thể xem trạng thái ở tab 'Tin của tôi'."}
             </Text>
@@ -304,17 +284,9 @@ export function CreateAccommodationForm({
               <Text style={s.pickBtnText}>+ Thêm ảnh</Text>
             </Pressable>
           </View>
-          {imageError && (
-            <Text accessibilityRole="alert" style={s.error}>
-              {imageError}
-            </Text>
-          )}
-          {existingImages.length > 0 || imageAssets.length > 0 ? (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={s.imageRow}
-            >
+          {imageError && <Text accessibilityRole="alert" style={s.error}>{imageError}</Text>}
+          {(existingImages.length > 0 || imageAssets.length > 0) ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.imageRow}>
               {/* Ảnh hiện có */}
               {existingImages.map((url, idx) => (
                 <View key={`existing-${idx}`} style={s.imageWrapper}>
@@ -347,15 +319,9 @@ export function CreateAccommodationForm({
               ))}
             </ScrollView>
           ) : (
-            <Pressable
-              style={s.emptyImageBox}
-              onPress={pickImages}
-              disabled={saving}
-            >
+            <Pressable style={s.emptyImageBox} onPress={pickImages} disabled={saving}>
               <Text style={{ fontSize: 32, marginBottom: 4 }}>🏠</Text>
-              <Text style={s.hint}>
-                Chưa có hình ảnh. Bấm để chọn ảnh từ máy.
-              </Text>
+              <Text style={s.hint}>Chưa có hình ảnh. Bấm để chọn ảnh từ máy.</Text>
             </Pressable>
           )}
         </View>
@@ -364,11 +330,7 @@ export function CreateAccommodationForm({
         <View style={s.card}>
           <Text style={s.sectionTitle}>Thông tin cơ bản</Text>
 
-          <View
-            onLayout={(e) =>
-              (fieldPositions.current.title = e.nativeEvent.layout.y)
-            }
-          >
+          <View onLayout={(e) => (fieldPositions.current.title = e.nativeEvent.layout.y)}>
             <Text style={s.label}>Tiêu đề bài đăng *</Text>
             <TextInput
               accessibilityLabel="Tiêu đề bài đăng, bắt buộc"
@@ -381,18 +343,10 @@ export function CreateAccommodationForm({
               autoCapitalize="sentences"
               returnKeyType="next"
             />
-            {!!errors.title && (
-              <Text accessibilityRole="alert" style={s.error}>
-                {errors.title}
-              </Text>
-            )}
+            {!!errors.title && <Text accessibilityRole="alert" style={s.error}>{errors.title}</Text>}
           </View>
 
-          <View
-            onLayout={(e) =>
-              (fieldPositions.current.price = e.nativeEvent.layout.y)
-            }
-          >
+          <View onLayout={(e) => (fieldPositions.current.price = e.nativeEvent.layout.y)}>
             <Text style={s.label}>Giá thuê mỗi tháng (VNĐ) *</Text>
             <TextInput
               accessibilityLabel="Giá thuê mỗi tháng"
@@ -404,18 +358,10 @@ export function CreateAccommodationForm({
               onChangeText={(value) => updateField("price", value)}
               editable={!saving}
             />
-            {!!errors.price && (
-              <Text accessibilityRole="alert" style={s.error}>
-                {errors.price}
-              </Text>
-            )}
+            {!!errors.price && <Text accessibilityRole="alert" style={s.error}>{errors.price}</Text>}
           </View>
 
-          <View
-            onLayout={(e) =>
-              (fieldPositions.current.deposit = e.nativeEvent.layout.y)
-            }
-          >
+          <View onLayout={(e) => (fieldPositions.current.deposit = e.nativeEvent.layout.y)}>
             <Text style={s.label}>Tiền cọc (VNĐ) *</Text>
             <TextInput
               accessibilityLabel="Tiền cọc"
@@ -427,26 +373,14 @@ export function CreateAccommodationForm({
               onChangeText={(value) => updateField("deposit", value)}
               editable={!saving}
             />
-            {!!errors.deposit && (
-              <Text accessibilityRole="alert" style={s.error}>
-                {errors.deposit}
-              </Text>
-            )}
+            {!!errors.deposit && <Text accessibilityRole="alert" style={s.error}>{errors.deposit}</Text>}
           </View>
 
-          <View
-            onLayout={(e) =>
-              (fieldPositions.current.description = e.nativeEvent.layout.y)
-            }
-          >
+          <View onLayout={(e) => (fieldPositions.current.description = e.nativeEvent.layout.y)}>
             <Text style={s.label}>Mô tả phòng *</Text>
             <TextInput
               accessibilityLabel="Mô tả phòng"
-              style={[
-                s.input,
-                s.description,
-                !!errors.description && s.invalid,
-              ]}
+              style={[s.input, s.description, !!errors.description && s.invalid]}
               placeholder="Phòng trọ Hoà Lạc, gần trường đại học FPT, thoáng mát... (tối thiểu 20 ký tự)"
               placeholderTextColor={colors.muted}
               multiline
@@ -455,11 +389,7 @@ export function CreateAccommodationForm({
               onChangeText={(value) => updateField("description", value)}
               editable={!saving}
             />
-            {!!errors.description && (
-              <Text accessibilityRole="alert" style={s.error}>
-                {errors.description}
-              </Text>
-            )}
+            {!!errors.description && <Text accessibilityRole="alert" style={s.error}>{errors.description}</Text>}
           </View>
         </View>
 
@@ -467,11 +397,7 @@ export function CreateAccommodationForm({
         <View style={s.card}>
           <Text style={s.sectionTitle}>Địa chỉ phòng</Text>
 
-          <View
-            onLayout={(e) =>
-              (fieldPositions.current.city = e.nativeEvent.layout.y)
-            }
-          >
+          <View onLayout={(e) => (fieldPositions.current.city = e.nativeEvent.layout.y)}>
             <Text style={s.label}>Tỉnh / Thành phố *</Text>
             <TextInput
               accessibilityLabel="Tỉnh hoặc Thành phố"
@@ -482,18 +408,10 @@ export function CreateAccommodationForm({
               onChangeText={(value) => updateField("city", value)}
               editable={!saving}
             />
-            {!!errors.city && (
-              <Text accessibilityRole="alert" style={s.error}>
-                {errors.city}
-              </Text>
-            )}
+            {!!errors.city && <Text accessibilityRole="alert" style={s.error}>{errors.city}</Text>}
           </View>
 
-          <View
-            onLayout={(e) =>
-              (fieldPositions.current.district = e.nativeEvent.layout.y)
-            }
-          >
+          <View onLayout={(e) => (fieldPositions.current.district = e.nativeEvent.layout.y)}>
             <Text style={s.label}>Quận / Huyện *</Text>
             <TextInput
               accessibilityLabel="Quận hoặc Huyện"
@@ -504,18 +422,10 @@ export function CreateAccommodationForm({
               onChangeText={(value) => updateField("district", value)}
               editable={!saving}
             />
-            {!!errors.district && (
-              <Text accessibilityRole="alert" style={s.error}>
-                {errors.district}
-              </Text>
-            )}
+            {!!errors.district && <Text accessibilityRole="alert" style={s.error}>{errors.district}</Text>}
           </View>
 
-          <View
-            onLayout={(e) =>
-              (fieldPositions.current.ward = e.nativeEvent.layout.y)
-            }
-          >
+          <View onLayout={(e) => (fieldPositions.current.ward = e.nativeEvent.layout.y)}>
             <Text style={s.label}>Phường / Xã *</Text>
             <TextInput
               accessibilityLabel="Phường hoặc Xã"
@@ -526,18 +436,10 @@ export function CreateAccommodationForm({
               onChangeText={(value) => updateField("ward", value)}
               editable={!saving}
             />
-            {!!errors.ward && (
-              <Text accessibilityRole="alert" style={s.error}>
-                {errors.ward}
-              </Text>
-            )}
+            {!!errors.ward && <Text accessibilityRole="alert" style={s.error}>{errors.ward}</Text>}
           </View>
 
-          <View
-            onLayout={(e) =>
-              (fieldPositions.current.street = e.nativeEvent.layout.y)
-            }
-          >
+          <View onLayout={(e) => (fieldPositions.current.street = e.nativeEvent.layout.y)}>
             <Text style={s.label}>Số nhà, ngõ ngách, tên đường *</Text>
             <TextInput
               accessibilityLabel="Số nhà, đường"
@@ -548,11 +450,7 @@ export function CreateAccommodationForm({
               onChangeText={(value) => updateField("street", value)}
               editable={!saving}
             />
-            {!!errors.street && (
-              <Text accessibilityRole="alert" style={s.error}>
-                {errors.street}
-              </Text>
-            )}
+            {!!errors.street && <Text accessibilityRole="alert" style={s.error}>{errors.street}</Text>}
           </View>
         </View>
 
@@ -569,12 +467,7 @@ export function CreateAccommodationForm({
                 onPress={() => updateField("roomType", key)}
                 disabled={saving}
               >
-                <Text
-                  style={[
-                    s.chipText,
-                    values.roomType === key && s.chipTextSelected,
-                  ]}
-                >
+                <Text style={[s.chipText, values.roomType === key && s.chipTextSelected]}>
                   {label}
                 </Text>
               </Pressable>
@@ -582,12 +475,7 @@ export function CreateAccommodationForm({
           </View>
 
           <View style={s.twoCols}>
-            <View
-              style={s.col}
-              onLayout={(e) =>
-                (fieldPositions.current.area = e.nativeEvent.layout.y)
-              }
-            >
+            <View style={s.col} onLayout={(e) => (fieldPositions.current.area = e.nativeEvent.layout.y)}>
               <Text style={s.label}>Diện tích (m²) *</Text>
               <TextInput
                 style={[s.input, !!errors.area && s.invalid]}
@@ -598,18 +486,9 @@ export function CreateAccommodationForm({
                 onChangeText={(value) => updateField("area", value)}
                 editable={!saving}
               />
-              {!!errors.area && (
-                <Text accessibilityRole="alert" style={s.error}>
-                  {errors.area}
-                </Text>
-              )}
+              {!!errors.area && <Text accessibilityRole="alert" style={s.error}>{errors.area}</Text>}
             </View>
-            <View
-              style={s.col}
-              onLayout={(e) =>
-                (fieldPositions.current.maxOccupants = e.nativeEvent.layout.y)
-              }
-            >
+            <View style={s.col} onLayout={(e) => (fieldPositions.current.maxOccupants = e.nativeEvent.layout.y)}>
               <Text style={s.label}>Số người tối đa *</Text>
               <TextInput
                 style={[s.input, !!errors.maxOccupants && s.invalid]}
@@ -620,19 +499,11 @@ export function CreateAccommodationForm({
                 onChangeText={(value) => updateField("maxOccupants", value)}
                 editable={!saving}
               />
-              {!!errors.maxOccupants && (
-                <Text accessibilityRole="alert" style={s.error}>
-                  {errors.maxOccupants}
-                </Text>
-              )}
+              {!!errors.maxOccupants && <Text accessibilityRole="alert" style={s.error}>{errors.maxOccupants}</Text>}
             </View>
           </View>
 
-          <View
-            onLayout={(e) =>
-              (fieldPositions.current.availableFrom = e.nativeEvent.layout.y)
-            }
-          >
+          <View onLayout={(e) => (fieldPositions.current.availableFrom = e.nativeEvent.layout.y)}>
             <Text style={s.label}>Có thể dọn vào *</Text>
             <Pressable
               accessibilityRole="button"
@@ -640,28 +511,15 @@ export function CreateAccommodationForm({
               onPress={() => setShowDatePicker(true)}
               disabled={saving}
             >
-              <Text
-                style={{
-                  color: values.availableFrom ? colors.text : colors.muted,
-                  fontSize: 15,
-                }}
-              >
+              <Text style={{ color: values.availableFrom ? colors.text : colors.muted, fontSize: 15 }}>
                 {values.availableFrom || "Chọn ngày có thể dọn vào"}
               </Text>
             </Pressable>
-            {!!errors.availableFrom && (
-              <Text accessibilityRole="alert" style={s.error}>
-                {errors.availableFrom}
-              </Text>
-            )}
+            {!!errors.availableFrom && <Text accessibilityRole="alert" style={s.error}>{errors.availableFrom}</Text>}
           </View>
           {showDatePicker && (
             <DateTimePicker
-              value={
-                values.availableFrom
-                  ? new Date(values.availableFrom)
-                  : new Date()
-              }
+              value={values.availableFrom ? new Date(values.availableFrom) : new Date()}
               mode="date"
               display={Platform.OS === "ios" ? "spinner" : "default"}
               minimumDate={new Date()}
@@ -669,10 +527,7 @@ export function CreateAccommodationForm({
                 setShowDatePicker(Platform.OS === "ios");
                 if (event.type === "set" && selectedDate) {
                   const year = selectedDate.getFullYear();
-                  const month = String(selectedDate.getMonth() + 1).padStart(
-                    2,
-                    "0",
-                  );
+                  const month = String(selectedDate.getMonth() + 1).padStart(2, "0");
                   const day = String(selectedDate.getDate()).padStart(2, "0");
                   updateField("availableFrom", `${year}-${month}-${day}`);
                 }
@@ -686,12 +541,7 @@ export function CreateAccommodationForm({
           <Text style={s.sectionTitle}>Chi phí dịch vụ</Text>
 
           <View style={s.twoCols}>
-            <View
-              style={s.col}
-              onLayout={(e) =>
-                (fieldPositions.current.electricity = e.nativeEvent.layout.y)
-              }
-            >
+            <View style={s.col} onLayout={(e) => (fieldPositions.current.electricity = e.nativeEvent.layout.y)}>
               <Text style={s.label}>Giá điện (đ/kWh) *</Text>
               <TextInput
                 style={[s.input, !!errors.electricity && s.invalid]}
@@ -702,18 +552,9 @@ export function CreateAccommodationForm({
                 onChangeText={(value) => updateField("electricity", value)}
                 editable={!saving}
               />
-              {!!errors.electricity && (
-                <Text accessibilityRole="alert" style={s.error}>
-                  {errors.electricity}
-                </Text>
-              )}
+              {!!errors.electricity && <Text accessibilityRole="alert" style={s.error}>{errors.electricity}</Text>}
             </View>
-            <View
-              style={s.col}
-              onLayout={(e) =>
-                (fieldPositions.current.water = e.nativeEvent.layout.y)
-              }
-            >
+            <View style={s.col} onLayout={(e) => (fieldPositions.current.water = e.nativeEvent.layout.y)}>
               <Text style={s.label}>Giá nước (đ/tháng) *</Text>
               <TextInput
                 style={[s.input, !!errors.water && s.invalid]}
@@ -724,21 +565,12 @@ export function CreateAccommodationForm({
                 onChangeText={(value) => updateField("water", value)}
                 editable={!saving}
               />
-              {!!errors.water && (
-                <Text accessibilityRole="alert" style={s.error}>
-                  {errors.water}
-                </Text>
-              )}
+              {!!errors.water && <Text accessibilityRole="alert" style={s.error}>{errors.water}</Text>}
             </View>
           </View>
 
           <View style={s.twoCols}>
-            <View
-              style={s.col}
-              onLayout={(e) =>
-                (fieldPositions.current.internet = e.nativeEvent.layout.y)
-              }
-            >
+            <View style={s.col} onLayout={(e) => (fieldPositions.current.internet = e.nativeEvent.layout.y)}>
               <Text style={s.label}>Internet (đ/tháng) *</Text>
               <TextInput
                 style={[s.input, !!errors.internet && s.invalid]}
@@ -749,11 +581,7 @@ export function CreateAccommodationForm({
                 onChangeText={(value) => updateField("internet", value)}
                 editable={!saving}
               />
-              {!!errors.internet && (
-                <Text accessibilityRole="alert" style={s.error}>
-                  {errors.internet}
-                </Text>
-              )}
+              {!!errors.internet && <Text accessibilityRole="alert" style={s.error}>{errors.internet}</Text>}
             </View>
             <View style={s.col}>
               <Text style={s.label}>Chi phí khác</Text>
@@ -797,11 +625,7 @@ export function CreateAccommodationForm({
         <View style={s.card}>
           <Text style={s.sectionTitle}>Điều khoản & Liên hệ</Text>
 
-          <View
-            onLayout={(e) =>
-              (fieldPositions.current.rentalTerms = e.nativeEvent.layout.y)
-            }
-          >
+          <View onLayout={(e) => (fieldPositions.current.rentalTerms = e.nativeEvent.layout.y)}>
             <Text style={s.label}>Điều khoản thuê *</Text>
             <TextInput
               style={[s.input, !!errors.rentalTerms && s.invalid]}
@@ -811,18 +635,10 @@ export function CreateAccommodationForm({
               onChangeText={(value) => updateField("rentalTerms", value)}
               editable={!saving}
             />
-            {!!errors.rentalTerms && (
-              <Text accessibilityRole="alert" style={s.error}>
-                {errors.rentalTerms}
-              </Text>
-            )}
+            {!!errors.rentalTerms && <Text accessibilityRole="alert" style={s.error}>{errors.rentalTerms}</Text>}
           </View>
 
-          <View
-            onLayout={(e) =>
-              (fieldPositions.current.contact = e.nativeEvent.layout.y)
-            }
-          >
+          <View onLayout={(e) => (fieldPositions.current.contact = e.nativeEvent.layout.y)}>
             <Text style={s.label}>Số điện thoại liên hệ *</Text>
             <TextInput
               accessibilityLabel="Số điện thoại liên hệ"
@@ -836,11 +652,7 @@ export function CreateAccommodationForm({
               returnKeyType="done"
               onSubmitEditing={submit}
             />
-            {!!errors.contact && (
-              <Text accessibilityRole="alert" style={s.error}>
-                {errors.contact}
-              </Text>
-            )}
+            {!!errors.contact && <Text accessibilityRole="alert" style={s.error}>{errors.contact}</Text>}
           </View>
         </View>
 
@@ -848,24 +660,14 @@ export function CreateAccommodationForm({
         {!!submitError && (
           <View accessibilityRole="alert" style={s.errorBox}>
             <Text style={s.error}>{submitError}</Text>
-            <Text style={s.hint}>
-              Thông tin đã nhập vẫn được giữ lại để bạn thử lại.
-            </Text>
+            <Text style={s.hint}>Thông tin đã nhập vẫn được giữ lại để bạn thử lại.</Text>
           </View>
         )}
 
         {/* Nút gửi */}
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={
-            saving
-              ? mode === "edit"
-                ? "Đang lưu thay đổi"
-                : "Đang đăng tin"
-              : mode === "edit"
-                ? "Lưu thay đổi"
-                : "Đăng tin phòng"
-          }
+          accessibilityLabel={saving ? (mode === "edit" ? "Đang lưu thay đổi" : "Đang đăng tin") : (mode === "edit" ? "Lưu thay đổi" : "Đăng tin phòng")}
           accessibilityState={{ disabled: saving, busy: saving }}
           style={[s.submit, saving && s.disabled]}
           disabled={saving}
@@ -873,19 +675,14 @@ export function CreateAccommodationForm({
         >
           {saving && <ActivityIndicator color="#fff" size="small" />}
           <Text style={s.submitText}>
-            {saving
-              ? mode === "edit"
-                ? "Đang lưu thay đổi..."
-                : "Đang đăng tin..."
-              : mode === "edit"
-                ? "Lưu thay đổi"
-                : "Đăng tin phòng"}
+            {saving ? (mode === "edit" ? "Đang lưu thay đổi..." : "Đang đăng tin...") : (mode === "edit" ? "Lưu thay đổi" : "Đăng tin phòng")}
           </Text>
         </Pressable>
       </ScrollView>
     </KeyboardScreen>
   );
 }
+
 const s = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: colors.bg },
   content: { padding: 16, gap: 16 },

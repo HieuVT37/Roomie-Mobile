@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -24,6 +24,7 @@ import {
   myPassApi,
 } from "../../api/pass";
 import { uploadImagesApi } from "../../api/uploads";
+import { useAuth } from "../../auth/AuthContext";
 import { PassCard } from "../../components/cards";
 import { Loading, Segments, shared } from "../../components/ui";
 import {
@@ -36,6 +37,7 @@ import {
   ITEM_CATEGORY_LABELS,
   normalizeVietnamese,
 } from "../../utils/labels";
+
 const themeColors = {
   bg: "#0f172a",
   card: "#1e293b",
@@ -47,6 +49,7 @@ const themeColors = {
   success: "#10b981",
   warning: "#d97706",
 };
+
 // Đồng bộ chính xác với backend Enum
 const CATEGORY_OPTIONS = [
   { key: "furniture", label: ITEM_CATEGORY_LABELS.furniture || "Nội thất" },
@@ -55,6 +58,7 @@ const CATEGORY_OPTIONS = [
   { key: "storage", label: ITEM_CATEGORY_LABELS.storage || "Đồ lưu trữ" },
   { key: "other", label: ITEM_CATEGORY_LABELS.other || "Khác" },
 ];
+
 const CONDITION_OPTIONS = [
   { key: "new", label: CONDITION_LABELS.new || "Mới 100%" },
   { key: "like_new", label: CONDITION_LABELS.like_new || "Như mới" },
@@ -62,21 +66,41 @@ const CONDITION_OPTIONS = [
   { key: "fair", label: CONDITION_LABELS.fair || "Khá" },
   { key: "old", label: CONDITION_LABELS.old || "Cũ" },
 ];
+
 const DEAL_OPTIONS = [
   { key: "sell", label: DEAL_LABELS.sell || "Bán" },
   { key: "give_away", label: DEAL_LABELS.give_away || "Cho tặng" },
   { key: "exchange", label: DEAL_LABELS.exchange || "Trao đổi" },
 ];
+
 export default function PassListScreen() {
   const router = useRouter();
-  const [tab, setTab] = useState("room");
+  const { user, loading: authLoading } = useAuth();
+  const params = useLocalSearchParams();
+  const VALID_TABS = ["room", "item", "mine", "create"];
+  const [tab, setTab] = useState(
+    VALID_TABS.includes(params.tab) ? params.tab : "room",
+  );
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
   const [isSearching, setIsSearching] = useState(false);
-  // Danh sách các bài pass vừa tạo trên client để luôn hiển thị ngay lập tức
-  const [recentCreated, setRecentCreated] = useState([]);
+  // Trạng thái riêng cho thao tác kéo-để-làm-mới (tránh spinner bị kẹt)
+  const [pulling, setPulling] = useState(false);
+
   const listRef = useRef(null);
   useTabPressScrollTop(listRef);
+
+  // Nhận tab từ route param (vd: router.replace({ pathname: "/pass", params: { tab: "mine" } }))
+  useEffect(() => {
+    if (VALID_TABS.includes(params.tab)) {
+      setTab(params.tab);
+      setText("");
+      setQ("");
+      // Xóa param để lần sau người dùng tự đổi tab không bị ghi đè
+      router.setParams({ tab: undefined });
+    }
+  }, [params.tab]);
+
   // Tự động tìm kiếm tức thì khi người dùng nhập (debounce 300ms)
   useEffect(() => {
     if (text.trim()) {
@@ -88,11 +112,28 @@ export default function PassListScreen() {
     }, 300);
     return () => clearTimeout(timer);
   }, [text]);
+
+  // Refresh danh sách khi quay lại từ trang chi tiết
+  const hasMountedRef = useRef(false);
+  // Luôn trỏ tới bản refresh mới nhất, tránh stale closure trong useFocusEffect
+  const refreshRef = useRef(null);
+  useFocusEffect(
+    useCallback(() => {
+      // Chỉ refresh khi quay lại màn hình (không phải lần đầu mount)
+      if (hasMountedRef.current) {
+        refreshRef.current?.();
+      } else {
+        hasMountedRef.current = true;
+      }
+    }, [tab]),
+  );
+
   const handleClearFilter = () => {
     setText("");
     setQ("");
     setIsSearching(false);
   };
+
   const fetchItems = useCallback(
     async (p) => {
       if (tab === "mine") {
@@ -103,6 +144,7 @@ export default function PassListScreen() {
         limit: 30,
         type: tab === "room" || tab === "item" ? tab : undefined,
       };
+
       if (q) {
         if (tab === "room") {
           params.area = q;
@@ -133,26 +175,36 @@ export default function PassListScreen() {
     },
     [q, tab],
   );
+
   const list = useInfiniteList(fetchItems, [q, tab]);
-  // Hợp nhất bài vừa tạo vào danh sách hiển thị và lọc theo khu vực / tên món đồ
+  refreshRef.current = list.refresh;
+
+  const handlePull = useCallback(async () => {
+    setPulling(true);
+    try {
+      await list.refresh();
+    } finally {
+      setPulling(false);
+    }
+  }, [list.refresh]);
+
+  // Lọc client-side theo moderationStatus + khu vực / tên món đồ
   const displayItems = useMemo(() => {
     const serverItems = list.items || [];
     if (tab === "create") return [];
-    // Lọc các bài vừa tạo khớp với tab hiện tại
-    const relevantRecent = recentCreated.filter((item) => {
-      if (tab === "mine") return true;
-      if (tab === "room") return item.type === "room";
-      if (tab === "item") return item.type === "item";
-      return true;
-    });
-    // Tránh trùng lặp id
-    const existingIds = new Set(
-      serverItems.map((it) => String(it.id || it._id)),
-    );
-    const uniqueRecent = relevantRecent.filter(
-      (it) => !existingIds.has(String(it.id || it._id)),
-    );
-    let allItems = [...uniqueRecent, ...serverItems];
+
+    let allItems = [...serverItems];
+
+    // *** QUAN TRỌNG: Lọc client-side chỉ hiển thị bài đã được duyệt trong tab công khai ***
+    // Tab "mine" hiển thị tất cả bài (bao gồm pending, rejected), tab khác chỉ hiển thị bài approved
+    if (tab !== "mine") {
+      allItems = allItems.filter((item) => {
+        // Chỉ hiển thị bài đăng đã được duyệt (moderationStatus === 'approved')
+        return item.moderationStatus === "approved";
+      });
+    }
+
+    // Sau khi lọc moderationStatus, tiếp tục lọc theo query tìm kiếm (nếu có)
     if (q) {
       const normQ = normalizeVietnamese(q);
       if (tab === "room") {
@@ -170,15 +222,17 @@ export default function PassListScreen() {
         });
       }
     }
+
     return allItems;
-  }, [list.items, recentCreated, tab, q]);
+  }, [list.items, tab, q]);
+
   const handleCreatedSuccess = (createdItem, createdType) => {
-    if (createdItem) {
-      setRecentCreated((prev) => [createdItem, ...prev]);
-    }
-    // Chuyển ngay đến tab tương ứng để người dùng thấy bài vừa đăng
-    setTab(createdType);
+    // Chuyển đến tab "Tin của tôi" để người dùng thấy trạng thái kiểm duyệt
+    setTab("mine");
+    // Làm mới danh sách để lấy bài mới từ server
+    list.refresh();
   };
+
   const handleDeleteMine = (item) => {
     const id = item.id || item._id;
     Alert.alert("Xác nhận xóa", `Bạn có chắc muốn xóa bài "${item.title}"?`, [
@@ -189,11 +243,8 @@ export default function PassListScreen() {
         onPress: async () => {
           try {
             await deletePassApi(id);
-            setRecentCreated((prev) =>
-              prev.filter((it) => String(it.id || it._id) !== String(id)),
-            );
-            list.refresh();
-            Alert.alert("Thành công", "Đã xóa bài pass.");
+            // Refresh danh sách trước khi hiển thị thông báo
+            await list.refresh();
           } catch (err) {
             Alert.alert(
               "Lỗi",
@@ -204,6 +255,7 @@ export default function PassListScreen() {
       },
     ]);
   };
+
   return (
     <View style={{ flex: 1, backgroundColor: themeColors.bg }}>
       <Segments
@@ -221,7 +273,10 @@ export default function PassListScreen() {
         ]}
       />
 
-      {tab === "create" ? (
+      {/* Nếu tab "mine" hoặc "create" mà chưa đăng nhập => hiển thị màn đăng nhập */}
+      {!authLoading && !user && (tab === "mine" || tab === "create") ? (
+        <LoginRequiredScreen />
+      ) : tab === "create" ? (
         <CreatePassForm onSuccess={handleCreatedSuccess} />
       ) : (
         <>
@@ -276,13 +331,13 @@ export default function PassListScreen() {
               style={{ flex: 1, backgroundColor: themeColors.bg }}
               ref={listRef}
               data={displayItems}
-              keyExtractor={(it) => String(it.id || it._id || Math.random())}
+              keyExtractor={(it, index) => String(it.id || it._id || index)}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ padding: 12, gap: 12 }}
               refreshControl={
                 <RefreshControl
-                  refreshing={list.refreshing}
-                  onRefresh={list.refresh}
+                  refreshing={pulling}
+                  onRefresh={handlePull}
                   tintColor={themeColors.primary}
                   colors={[themeColors.primary]}
                 />
@@ -371,6 +426,7 @@ export default function PassListScreen() {
                             params: {
                               id: String(item.id || item._id),
                               edit: "true",
+                              returnTab: "mine",
                             },
                           })
                         }
@@ -394,10 +450,81 @@ export default function PassListScreen() {
     </View>
   );
 }
+
+function LoginRequiredScreen() {
+  const router = useRouter();
+
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: themeColors.bg,
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 24,
+      }}
+    >
+      <View
+        style={{
+          alignItems: "center",
+          maxWidth: 320,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 24,
+            fontWeight: "700",
+            color: themeColors.text,
+            marginBottom: 12,
+            textAlign: "center",
+          }}
+        >
+          Bạn chưa đăng nhập
+        </Text>
+
+        <Text
+          style={{
+            fontSize: 15,
+            color: themeColors.muted,
+            textAlign: "center",
+            lineHeight: 22,
+            marginBottom: 32,
+          }}
+        >
+          Đăng nhập để xem bài của bạn và đăng tin cho thuê phòng
+        </Text>
+
+        <Pressable
+          style={{
+            backgroundColor: themeColors.primary,
+            borderRadius: 12,
+            paddingVertical: 14,
+            paddingHorizontal: 32,
+            minWidth: 150,
+            alignItems: "center",
+          }}
+          onPress={() => router.push("/login")}
+        >
+          <Text
+            style={{
+              color: "#fff",
+              fontSize: 16,
+              fontWeight: "700",
+            }}
+          >
+            Đăng nhập
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 function CreatePassForm({ onSuccess }) {
   const [type, setType] = useState("room");
   const scrollRef = useRef(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+
   // State riêng biệt cho Pass phòng
   const [roomForm, setRoomForm] = useState({
     title: "",
@@ -412,6 +539,7 @@ function CreatePassForm({ onSuccess }) {
     landlordAgreed: false,
     transferTerms: "",
   });
+
   // State riêng biệt cho Pass đồ
   const [itemForm, setItemForm] = useState({
     title: "",
@@ -423,14 +551,18 @@ function CreatePassForm({ onSuccess }) {
     condition: "good",
     dealType: "sell",
   });
+
   // Validation errors
   const [errors, setErrors] = useState({});
+
   // Hình ảnh (lưu thông tin asset từ ImagePicker)
   const [imageAssets, setImageAssets] = useState([]);
   const [loading, setLoading] = useState(false);
+
   // Validate form
   const validateForm = () => {
     const newErrors = {};
+
     if (type === "room") {
       // Validate Pass Phòng
       if (!roomForm.title.trim()) {
@@ -440,9 +572,11 @@ function CreatePassForm({ onSuccess }) {
       } else if (roomForm.title.trim().length > 100) {
         newErrors.title = "Tiêu đề không được quá 100 ký tự";
       }
+
       if (!roomForm.address.trim()) {
         newErrors.address = "Vui lòng nhập địa chỉ phòng";
       }
+
       if (roomForm.price && isNaN(Number(roomForm.price))) {
         newErrors.price = "Giá phải là số";
       } else if (roomForm.price && Number(roomForm.price) < 0) {
@@ -450,11 +584,13 @@ function CreatePassForm({ onSuccess }) {
       } else if (roomForm.price && Number(roomForm.price) > 100000000) {
         newErrors.price = "Giá không hợp lệ (quá 100 triệu)";
       }
+
       if (roomForm.deposit && isNaN(Number(roomForm.deposit))) {
         newErrors.deposit = "Tiền cọc phải là số";
       } else if (roomForm.deposit && Number(roomForm.deposit) < 0) {
         newErrors.deposit = "Tiền cọc không được âm";
       }
+
       const leaseMonths = roomForm.remainingLeaseMonths.trim();
       if (!leaseMonths) {
         newErrors.remainingLeaseMonths =
@@ -473,6 +609,7 @@ function CreatePassForm({ onSuccess }) {
       } else if (itemForm.title.trim().length > 100) {
         newErrors.title = "Tên món đồ không được quá 100 ký tự";
       }
+
       if (itemForm.dealType !== "give_away") {
         if (itemForm.price && isNaN(Number(itemForm.price))) {
           newErrors.price = "Giá phải là số";
@@ -483,34 +620,40 @@ function CreatePassForm({ onSuccess }) {
         }
       }
     }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
+
   // Scroll to first error
   const scrollToError = () => {
     if (scrollRef.current) {
-      //@ts-ignore
       scrollRef.current.scrollTo({ y: 0, animated: true });
     }
   };
+
   const pickImages = async () => {
     if (imageAssets.length >= 8) {
       Alert.alert("Giới hạn", "Tối đa chỉ được chọn 8 hình ảnh.");
       return;
     }
+
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsMultipleSelection: true,
       selectionLimit: 8 - imageAssets.length,
       quality: 0.8,
     });
+
     if (!result.canceled) {
       setImageAssets((prev) => [...prev, ...result.assets].slice(0, 8));
     }
   };
+
   const removeImage = (index) => {
     setImageAssets((prev) => prev.filter((_, i) => i !== index));
   };
+
   // Helper render error
   const ErrorText = ({ field }) => {
     if (!errors[field]) return null;
@@ -520,6 +663,7 @@ function CreatePassForm({ onSuccess }) {
       </Text>
     );
   };
+
   const handleSubmit = async () => {
     // Validate form
     if (!validateForm()) {
@@ -527,6 +671,7 @@ function CreatePassForm({ onSuccess }) {
       // Không hiển thị Alert nữa, chỉ scroll đến lỗi
       return;
     }
+
     setLoading(true);
     try {
       // 1. Upload ảnh lên server (nếu có chọn)
@@ -558,15 +703,19 @@ function CreatePassForm({ onSuccess }) {
           ? uploadResult
           : uploadResult.urls || [];
       }
+
       // 2. Chuẩn bị payload
       let payload;
+
       if (type === "room") {
         const leaseMonths = Number(roomForm.remainingLeaseMonths);
+
         // Format availableFrom chuẩn YYYY-MM-DD (đã được format từ DatePicker)
         let availDate = null;
         if (roomForm.availableFrom.trim()) {
           availDate = roomForm.availableFrom.trim();
         }
+
         payload = {
           type: "room",
           title: roomForm.title.trim(),
@@ -605,8 +754,10 @@ function CreatePassForm({ onSuccess }) {
           },
         };
       }
+
       const res = await createPassApi(payload);
       const createdListing = res?.listing || res;
+
       Alert.alert(
         "✅ Đã gửi bài đăng",
         "Bài viết của bạn đang chờ quản trị viên duyệt. Sau khi được duyệt, bài viết sẽ hiển thị công khai.\n\nBạn có thể xem trạng thái ở tab 'Tin của tôi'.",
@@ -658,9 +809,9 @@ function CreatePassForm({ onSuccess }) {
       setLoading(false);
     }
   };
+
   return (
     <ScrollView
-      //@ts-ignore
       ref={scrollRef}
       contentContainerStyle={{ padding: 16, gap: 16 }}
     >
@@ -1065,13 +1216,14 @@ function CreatePassForm({ onSuccess }) {
     </ScrollView>
   );
 }
+
 const s = StyleSheet.create({
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
     marginHorizontal: 12,
-    marginTop: 8,
-    marginBottom: 8,
+    marginTop: 0,
+    marginBottom: 12,
     gap: 8,
   },
   searchBar: {
