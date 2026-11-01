@@ -20,7 +20,9 @@
       "predictiveBackGestureEnabled": false,
       "googleServicesFile": "./google-services.json",
       "package": "com.roomie.mobile",
-      "permissions": ["android.permission.RECORD_AUDIO"]
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -60,9 +62,10 @@
       "reactCompiler": true
     },
     "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "7f9b40c0-7889-49e1-bc1d-0fb4a2d93cbc"
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
       },
       "firebase": {
         "apiKey": "AIzaSyAeil3ekCt09IPAQYzr-p7gvmhfa-mxpX4",
@@ -71,7 +74,11 @@
         "storageBucket": "rommie-moblie.firebasestorage.app",
         "messagingSenderId": "954492563875",
         "appId": "1:954492563875:web:2659eb143b1f931c3b6a16"
+      },
+      "eas": {
+        "projectId": "81ab142d-a8e1-42e8-9291-ee6731d87c88"
       }
-    }
+    },
+    "owner": "vothehieu37"
   }
 }

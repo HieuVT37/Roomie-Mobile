@@ -565,7 +565,10 @@ function AccommodationDetailContent({ id, shouldEdit }) {
             {/* Modal Header */}
             <View style={sModal.header}>
               <Pressable
-                onPress={() => setShowEditModal(false)}
+                onPress={() => {
+                  setShowEditModal(false);
+                  if (shouldEdit) router.back();
+                }}
                 style={sModal.headerBtn}
               >
                 <Text style={{ color: themeColors.muted, fontSize: 16 }}>
@@ -584,7 +587,8 @@ function AccommodationDetailContent({ id, shouldEdit }) {
               accommodationId={l.id || l._id}
               onSuccess={() => {
                 setShowEditModal(false);
-                loadData();
+                if (shouldEdit) router.back();
+                else loadData();
               }}
             />
           </View>

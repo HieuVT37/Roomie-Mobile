@@ -3,6 +3,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   BackHandler,
   FlatList,
   Keyboard,
@@ -15,6 +16,7 @@ import {
   View,
 } from "react-native";
 import {
+  deleteAccommodationApi,
   listAccommodationsApi,
   myAccommodationsApi,
 } from "../../api/accommodations";
@@ -38,10 +40,12 @@ import { accommodationErrorMessage } from "../../utils/accommodation-form";
 import { getAccommodationAccess } from "../../utils/accommodation-permissions";
 const themeColors = { ...colors, placeholder: colors.muted };
 export default function AccommodationListScreen() {
+  const router = useRouter();
   const [tab, setTab] = useState("search");
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
   const [isSearching, setIsSearching] = useState(false);
+  const [pulling, setPulling] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [success, setSuccess] = useState(null);
   const { user, loading: authLoading, refreshSession } = useAuth();
@@ -73,6 +77,33 @@ export default function AccommodationListScreen() {
     [q, tab, canViewMine, userKey, refreshKey, authLoading],
     { enabled: listVisible },
   );
+
+  // Luôn trỏ tới bản refresh mới nhất để useFocusEffect không dùng bản cũ
+  const refreshRef = useRef(null);
+  refreshRef.current = list.refresh;
+  const hasMountedRef = useRef(false);
+
+  // Quay lại màn hình này (vd: sau khi sửa tin ở trang chi tiết) thì tải lại danh sách
+  useFocusEffect(
+    useCallback(() => {
+      if (hasMountedRef.current) {
+        refreshRef.current?.();
+      } else {
+        hasMountedRef.current = true;
+      }
+    }, []),
+  );
+
+  // Spinner kéo-để-làm-mới chỉ hiện khi người dùng tự kéo
+  const handlePull = useCallback(async () => {
+    setPulling(true);
+    try {
+      await list.refresh();
+    } finally {
+      setPulling(false);
+    }
+  }, [list.refresh]);
+
   // Recheck existing server data when returning from Account/Subscription.
   // Refreshing the session never resets the bootstrap loading state or form draft.
   useFocusEffect(
@@ -110,6 +141,38 @@ export default function AccommodationListScreen() {
     setRefreshKey((value) => value + 1);
     setTab("mine");
   };
+
+  // Mở trang chi tiết ở chế độ chỉnh sửa
+  const handleEditMine = (item) => {
+    const id = item.id || item._id;
+    router.push({
+      pathname: "/accommodation/[id]",
+      params: { id: String(id), edit: "true" },
+    });
+  };
+
+  const handleDeleteMine = (item) => {
+    const id = item.id || item._id;
+    Alert.alert("Xác nhận xóa", `Bạn có chắc muốn xóa bài "${item.title}"?`, [
+      { text: "Hủy", style: "cancel" },
+      {
+        text: "Xóa",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await deleteAccommodationApi(id);
+            setRefreshKey((value) => value + 1);
+          } catch (err) {
+            Alert.alert(
+              "Lỗi",
+              accommodationErrorMessage(err, "Không thể xóa bài đăng."),
+            );
+          }
+        },
+      },
+    ]);
+  };
+
   return (
     <View style={s.container}>
       <Segments
@@ -118,7 +181,7 @@ export default function AccommodationListScreen() {
         options={[
           { key: "search", label: "Tìm phòng" },
           { key: "mine", label: "Tin của tôi" },
-          { key: "create", label: "Tin mới" },
+          { key: "create", label: "Đăng tin" },
         ]}
       />
 
@@ -179,6 +242,7 @@ export default function AccommodationListScreen() {
                   )}
                 </View>
               </View>
+              {!!q && <Text style={s.query}>Kết quả cho “{q}”</Text>}
             </>
           ) : (
             ""
@@ -214,8 +278,8 @@ export default function AccommodationListScreen() {
               contentContainerStyle={[s.listContent, { paddingBottom: bottom }]}
               refreshControl={
                 <RefreshControl
-                  refreshing={list.refreshing}
-                  onRefresh={list.refresh}
+                  refreshing={pulling}
+                  onRefresh={handlePull}
                   tintColor={colors.primary}
                   colors={[colors.primary]}
                 />
@@ -286,9 +350,57 @@ export default function AccommodationListScreen() {
                   </View>
                 ) : undefined
               }
-              renderItem={({ item }) => (
-                <AccommodationCard item={item} showStatus={tab === "mine"} />
-              )}
+              renderItem={({ item }) =>
+                tab === "mine" ? (
+                  <View>
+                    <AccommodationCard item={item} />
+                    <View style={s.mineActionRow}>
+                      <View style={s.mineStatusWrap}>
+                        <View
+                          style={[
+                            s.dotStatus,
+                            {
+                              backgroundColor:
+                                item.moderationStatus === "approved"
+                                  ? "#10b981"
+                                  : item.moderationStatus === "rejected"
+                                    ? "#ef4444"
+                                    : "#d97706",
+                            },
+                          ]}
+                        />
+                        <Text style={s.moderationText}>
+                          {item.moderationStatus === "approved"
+                            ? "Đã duyệt công khai"
+                            : item.moderationStatus === "rejected"
+                              ? "Bị từ chối"
+                              : "Chờ quản trị duyệt"}
+                        </Text>
+                      </View>
+                      <Pressable
+                        style={s.mineEditBtn}
+                        onPress={() => handleEditMine(item)}
+                      >
+                        <Text style={s.mineEditBtnText}>Sửa</Text>
+                      </Pressable>
+                      <Pressable
+                        style={s.mineDeleteBtn}
+                        onPress={() => handleDeleteMine(item)}
+                      >
+                        <Text style={s.mineDeleteBtnText}>Xóa</Text>
+                      </Pressable>
+                    </View>
+                    {item.moderationStatus === "rejected" &&
+                      !!item.rejectionReason && (
+                        <Text style={s.rejectReason}>
+                          Lý do từ chối: {item.rejectionReason}
+                        </Text>
+                      )}
+                  </View>
+                ) : (
+                  <AccommodationCard item={item} />
+                )
+              }
             />
           )}
         </View>
@@ -384,29 +496,9 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginHorizontal: 12,
-    marginTop: 0,
-    marginBottom: 12,
-    gap: 8,
-  },
-  emptyWrap: {
-    alignItems: "center",
-    paddingVertical: 24,
-    paddingHorizontal: 16,
-  },
-  clearFilterEmptyBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: colors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
     marginTop: 8,
-  },
-  clearFilterEmptyBtnText: {
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 13,
+    marginBottom: 8,
+    gap: 8,
   },
   searchInputWrap: {
     flex: 1,
@@ -486,15 +578,72 @@ const s = StyleSheet.create({
     alignItems: "center",
     alignSelf: "center",
   },
-  empty: { padding: 24, paddingTop: 44, alignItems: "center", gap: 12 },
-  emptyIcon: { fontSize: 40 },
-  emptyTitle: {
-    color: colors.text,
-    fontWeight: "700",
-    fontSize: 17,
-    textAlign: "center",
+  emptyWrap: {
+    alignItems: "center",
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+  },
+  clearFilterEmptyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginTop: 8,
+  },
+  clearFilterEmptyBtnText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 13,
   },
   footer: { padding: 16, alignItems: "center", gap: 8 },
+  // Thanh quản lý trong "Tin của tôi" (giống mục Pass)
+  mineActionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: -8,
+    gap: 8,
+  },
+  mineStatusWrap: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  dotStatus: { width: 8, height: 8, borderRadius: 4 },
+  moderationText: { fontSize: 12, color: colors.muted, fontWeight: "500" },
+  mineEditBtn: {
+    backgroundColor: "#312e81",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  mineEditBtnText: { color: "#a5b4fc", fontWeight: "600", fontSize: 12 },
+  mineDeleteBtn: {
+    backgroundColor: "#450a0a",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  mineDeleteBtnText: { color: "#fca5a5", fontWeight: "600", fontSize: 12 },
+  rejectReason: {
+    color: "#fca5a5",
+    fontSize: 12,
+    lineHeight: 18,
+    paddingHorizontal: 12,
+    marginTop: 6,
+  },
   noticeContainer: {
     flex: 1,
     padding: 20,

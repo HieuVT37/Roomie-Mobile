@@ -402,10 +402,14 @@ export default function PassDetailScreen() {
           visible={showEditModal}
           initialListing={l}
           initialContact={contact || ""}
-          onClose={() => setShowEditModal(false)}
+          onClose={() => {
+            setShowEditModal(false);
+            if (edit === "true") router.back();
+          }}
           onSuccess={() => {
             setShowEditModal(false);
-            loadData();
+            if (edit === "true") router.back();
+            else loadData();
           }}
         />
       )}
